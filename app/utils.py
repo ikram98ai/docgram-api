@@ -13,8 +13,7 @@ logger.setLevel(logging.INFO)
 
 
 s3_client = boto3.client("s3")
-S3_BUCKET = os.getenv("S3_BUCKET_NAME", "pdf-platform-files")
-STAGE = os.getenv("STAGE", "dev")
+S3_BUCKET = os.getenv("S3_BUCKET_NAME", "docgram-files")
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

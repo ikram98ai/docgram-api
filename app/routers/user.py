@@ -21,8 +21,6 @@ logger.setLevel(logging.INFO)
 router = APIRouter(prefix="/users", tags=["Users"])
 
 # AWS clients (initialized once for Lambda container reuse)
-s3_client = boto3.client("s3")
-S3_BUCKET = os.getenv("S3_BUCKET_NAME", "pdf-platform-files")
 STAGE = os.getenv("STAGE", "dev")
 
 
