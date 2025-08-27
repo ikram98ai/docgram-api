@@ -134,7 +134,11 @@ resource "aws_lambda_function" "docgram_lambda" {
   architectures = ["x86_64"]
   environment {
     variables = {
-      GEMINI_API_KEY = var.gemini_api_key
+      GEMINI_API_KEY                = var.gemini_api_key
+      DEBUG                         = "False"
+      SECRET_KEY                    = var.secret_key
+      ALGORITHM                     = "HS256"
+      ACCESS_TOKEN_EXPIRE_MINUTES   = "30"
     }
   }
   depends_on = [

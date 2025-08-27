@@ -43,3 +43,10 @@ variable "gemini_api_key" {
   type        = string
   sensitive   = true
 }
+
+
+variable "secret_key" {
+  description = "Secret key for JWT"
+  type        = string
+  sensitive   = true
+}
