@@ -9,7 +9,7 @@ from app.models import (
     ChatMessageModel,
     Notification,
 )
-from app.utils import hash, is_strong_password
+from app.utils import hash_password, is_strong_password
 
 app = typer.Typer()
 
@@ -58,7 +58,7 @@ def create_admin(
         )
         raise typer.Exit()
 
-    hashed_password = hash(password)
+    hashed_password = hash_password(password)
     admin_user = UserModel(
         username=username,
         email=email,
