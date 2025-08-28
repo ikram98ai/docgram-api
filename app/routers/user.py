@@ -273,7 +273,7 @@ async def get_user_profile(
         query_filter = None
         if user_id != current_user_id:
             # Show only public posts for other users
-            query_filter = PostModel.is_public == True
+            query_filter = PostModel.is_public == 1
 
         for post in PostModel.user_posts_index.query(
             hash_key=user_id,

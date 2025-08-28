@@ -135,7 +135,7 @@ class PublicPostIndex(GlobalSecondaryIndex):
         index_name = "public-posts-index"
         projection = AllProjection()  # More efficient for lookups
 
-    is_public = UnicodeAttribute(hash_key=True)
+    is_public = NumberAttribute(hash_key=True)
     created_at = UTCDateTimeAttribute(range_key=True)
 
 
@@ -145,7 +145,7 @@ class PostModel(Model):
     """
 
     class Meta:
-        table_name = f"docgram-{STAGE}-pdf-posts"
+        table_name = f"docgram-{STAGE}-posts"
         region = REGION
         billing_mode = "PAY_PER_REQUEST"
 
@@ -170,7 +170,7 @@ class PostModel(Model):
     shares_count = NumberAttribute(default=0)
 
     # Status
-    is_public = BooleanAttribute(default=True)
+    is_public = NumberAttribute(default=1)
 
     # Timestamps
     created_at = UTCDateTimeAttribute(default=datetime.now)

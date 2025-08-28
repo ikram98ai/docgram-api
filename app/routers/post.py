@@ -15,9 +15,8 @@ from fastapi import (
     APIRouter,
 )
 from ..dependencies import get_current_user_id
-import fitz  # PyMuPDF
 from ..utils import upload_to_s3
-
+from .utils import get_post_by_id, get_user_by_id, get_pdf_page_count, generate_pdf_thumbnail, process_pdf_embeddings, ask_pdf_question
 # Import our models
 from ..models import (
     UserModel,
@@ -47,78 +46,6 @@ router = APIRouter(prefix="/posts", tags=["Posts"])
 # AWS clients (initialized once for Lambda container reuse)
 STAGE = os.getenv("STAGE", "dev")
 
-
-def get_pdf_page_count(pdf_content: bytes) -> int:
-    """Get page count from PDF bytes"""
-    try:
-        with fitz.Document(stream=pdf_content, filetype="pdf") as pdf_doc:
-            return pdf_doc.page_count
-    except Exception as e:
-        logger.error(f"Error getting page count: {e}")
-        return 1
-
-
-async def generate_pdf_thumbnail(pdf_content: bytes, post_id: str) -> Optional[str]:
-    """Generate thumbnail from first page of PDF"""
-    try:
-        with fitz.Document(stream=pdf_content, filetype="pdf") as pdf_doc:
-            if pdf_doc.page_count > 0:
-                first_page = pdf_doc[0]
-                pixmap = first_page.get_pixmap(
-                    matrix=fitz.Matrix(2.0, 2.0)
-                )  # 2x scaling
-                img_data = pixmap.tobytes("png")
-
-                # Upload thumbnail to S3
-                thumbnail_key = f"{STAGE}/thumbnails/{post_id}_thumbnail.png"
-                return await upload_to_s3(img_data, thumbnail_key, "image/png")
-    except Exception as e:
-        logger.error(f"Thumbnail generation error: {e}")
-    return None
-
-
-async def get_user_by_id(user_id: str) -> UserModel:
-    """Get user by ID with error handling"""
-    try:
-        return UserModel.get(user_id)
-    except UserModel.DoesNotExist:
-        raise HTTPException(status_code=404, detail="User not found")
-
-
-async def get_post_by_id(post_id: str) -> PostModel:
-    """Get post by ID with error handling"""
-    try:
-        return PostModel.get(post_id)
-    except PostModel.DoesNotExist:
-        raise HTTPException(status_code=404, detail="Post not found")
-
-
-# Background task functions
-async def process_pdf_embeddings(pdf_content: bytes, post_id: str, title: str):
-    """Background task to process PDF for embeddings"""
-    try:
-        # TODO: Implement your PDF processing logic here
-        # This should extract text and create embeddings for vector search
-        logger.info(f"Processing PDF embeddings for post {post_id}")
-        # process_file(file_content=pdf_content, book_id=post_id)
-    except Exception as e:
-        logger.error(f"PDF processing error for {post_id}: {e}")
-
-
-async def ask_pdf_question(query: str, post_id: str, title: str) -> str:
-    """Ask question to PDF using vector search"""
-    try:
-        # TODO: Implement your PDF question answering logic here
-        # return ask_pdf(query, post_id, title)
-        return "This is a placeholder response. Implement your PDF QA logic here."
-    except Exception as e:
-        logger.error(f"PDF QA error: {e}")
-        return "Sorry, I'm having trouble processing your question right now."
-
-
-# Routes
-
-
 @router.get("/", response_model=List[Post])
 async def list_posts(
     offset: int = Query(0, ge=0),
@@ -130,7 +57,7 @@ async def list_posts(
         posts = []
         # Query public posts using GSI
         for post in PostModel.public_posts_index.query(
-            hash_key=True,
+            hash_key=1,
             scan_index_forward=False,  # Descending order
             limit=limit + offset,
         ):
@@ -277,7 +204,7 @@ async def create_post(
 
         # Upload PDF to S3
         pdf_key = f"{STAGE}/pdfs/{post_id}.pdf"
-        pdf_url = await upload_to_s3(pdf_content, pdf_key, "application/pdf")
+        pdf_url = upload_to_s3(pdf_content, pdf_key, "application/pdf")
 
         # Generate thumbnail
         thumbnail_url = await generate_pdf_thumbnail(pdf_content, post_id)
@@ -292,7 +219,7 @@ async def create_post(
             thumbnail_url=thumbnail_url,
             file_size=len(pdf_content),
             page_count=page_count,
-            is_public=is_public,
+            is_public=int(is_public),
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
@@ -364,7 +291,7 @@ async def update_post(
         if update_data.description is not None:
             post.description = update_data.description
         if update_data.is_public is not None:
-            post.is_public = update_data.is_public
+            post.is_public = int(update_data.is_public)
 
         post.updated_at = datetime.now(timezone.utc)
         post.save()
@@ -635,7 +562,7 @@ async def search_posts(
         posts = []
         for post in PostModel.scan(
             filter_condition=PostModel.title.contains(q.lower())
-            & PostModel.is_public.is_in([True])
+            & PostModel.is_public==1 
         ):
             posts.append(post)
 
@@ -708,11 +635,11 @@ async def toggle_post_visibility(
         if post.user_id != current_user_id:
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        post.is_public = not post.is_public
+        post.is_public = int(not (post.is_public==1))
         post.updated_at = datetime.now(timezone.utc)
         post.save()
 
-        return {"is_public": post.is_public}
+        return {"is_public": post.is_public==1}
 
     except Exception as e:
         logger.error(f"Error toggling visibility for post {post_id}: {e}")
