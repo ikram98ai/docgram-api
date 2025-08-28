@@ -102,6 +102,15 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "arn:aws:dynamodb:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/khaneducation_*/index/*"
         ]
 
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = "${aws_s3_bucket.docgram_storage.arn}/*"
       }
     ]
   })
@@ -156,6 +165,33 @@ resource "aws_cloudwatch_log_group" "docgram_lambda_logs" {
   retention_in_days = 14
   tags              = var.tags
 }
+
+############################################################# S3 BUCKET FOR STORING FILES #############################################################
+
+resource "aws_s3_bucket" "docgram_storage" {
+  bucket = "docgram-files"
+  tags   = var.tags
+}
+
+resource "aws_s3_bucket_public_access_block" "docgram_storage_public_access" {
+  bucket                  = aws_s3_bucket.docgram_storage.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_cors_configuration" "docgram_storage_cors" {
+  bucket = aws_s3_bucket.docgram_storage.id
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["GET", "PUT", "POST", "DELETE"]
+    allowed_origins = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+
 
 
 ############################################################# API GATEWAY CONFIGURATION #############################################################

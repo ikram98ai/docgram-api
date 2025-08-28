@@ -44,7 +44,7 @@ async def generate_pdf_thumbnail(pdf_content: bytes, post_id: str) -> Optional[s
 
                 # Upload thumbnail to S3
                 thumbnail_key = f"{STAGE}/thumbnails/{post_id}_thumbnail.png"
-                return await upload_to_s3(img_data, thumbnail_key, "image/png")
+                return upload_to_s3(img_data, thumbnail_key, "image/png")
     except Exception as e:
         logger.error(f"Thumbnail generation error: {e}")
     return None
