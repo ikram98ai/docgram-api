@@ -1,11 +1,10 @@
 # app/routers/auth.py
-from fastapi import APIRouter, status, HTTPException, Depends
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, status, HTTPException
 from datetime import datetime, timezone
 from typing import Optional
 import uuid
 import logging
-from ..schemas import User, TokenResponse, UserRegistrationRequest
+from ..schemas import User, TokenResponse, UserLoginRequest, UserRegistrationRequest
 from ..models import UserModel
 from ..dependencies import create_access_token
 from ..utils import verify_password, hash_password
@@ -42,10 +41,10 @@ async def authenticate_user(username: str, password: str) -> Optional[UserModel]
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login_user(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login_user(login_data: UserLoginRequest):
     """Login user and return JWT token"""
     try:
-        user = await authenticate_user(form_data.username, form_data.password)
+        user = await authenticate_user(login_data.username, login_data.password)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
