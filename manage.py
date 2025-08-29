@@ -8,6 +8,7 @@ from app.models import (
     ChatConversationModel,
     ChatMessageModel,
     Notification,
+    BookmarkModel
 )
 from app.utils import hash_password, is_strong_password
 
@@ -28,6 +29,7 @@ def create_tables():
         ChatConversationModel,
         ChatMessageModel,
         Notification,
+        BookmarkModel
     ]
     for table in tables:
         if not table.exists():

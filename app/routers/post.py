@@ -22,6 +22,7 @@ from ..models import (
     UserModel,
     PostModel,
     LikeModel,
+    BookmarkModel,
     CommentModel,
     ChatConversationModel,
     ChatMessageModel,
@@ -104,6 +105,7 @@ async def list_posts(
                     comments_count=post.comments_count,
                     shares_count=post.shares_count,
                     is_liked=context.get("is_liked", False),
+                    is_bookmarked=context.get("is_bookmarked", False),
                     created_at=post.created_at,
                 ).dict()
 
@@ -399,6 +401,39 @@ async def toggle_like(
 
     except Exception as e:
         logger.error(f"Error toggling like for post {post_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/{post_id}/bookmark")
+async def toggle_bookmark(
+    post_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
+):
+    """Toggle bookmark on a post"""
+    try:
+        post = await get_post_by_id(post_id)
+        bookmark_id = BookmarkModel.create_bookmark_id(post_id, current_user_id)
+
+        try:
+            # Check if already bookmarked
+            existing_bookmark = BookmarkModel.get(bookmark_id)
+            # Unbookmark
+            existing_bookmark.delete()
+            is_bookmarked = False
+        except BookmarkModel.DoesNotExist:
+            # Bookmark
+            bookmark = BookmarkModel(
+                bookmark_id=bookmark_id,
+                post_id=post_id,
+                user_id=current_user_id,
+                created_at=datetime.now(timezone.utc),
+            )
+            bookmark.save()
+            is_bookmarked = True
+
+        return {"is_bookmarked": is_bookmarked}
+
+    except Exception as e:
+        logger.error(f"Error toggling bookmark for post {post_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -859,6 +894,7 @@ async def get_user_feed(
                     comments_count=post.comments_count,
                     shares_count=post.shares_count,
                     is_liked=context.get("is_liked", False),
+                    is_bookmarked=context.get("is_bookmarked", False),
                     created_at=post.created_at,
                 ).dict()
 

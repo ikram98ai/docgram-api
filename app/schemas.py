@@ -62,6 +62,7 @@ class Post(BaseModel):
     comments_count: int = 0
     shares_count: int = 0
     is_liked: Optional[bool] = None  # Context-dependent
+    is_bookmarked: Optional[bool] = None # Context-dependent
     created_at: datetime
 
     class Config:
@@ -120,6 +121,17 @@ class FollowRelationship(BaseModel):
 
 class Like(BaseModel):
     id: str = Field(alias="like_id")
+    post_id: str
+    user_id: str
+    created_at: datetime
+
+    class Config:
+        validate_by_name = True
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class Bookmark(BaseModel):
+    id: str = Field(alias="bookmark_id")
     post_id: str
     user_id: str
     created_at: datetime

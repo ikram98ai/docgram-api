@@ -365,11 +365,56 @@ class Notification(Model):
     expires_at = UTCDateTimeAttribute(null=True)
 
 
+class UserBookmarkIndex(GlobalSecondaryIndex):
+    class Meta:
+        index_name = "user-bookmarks-index"
+        projection = AllProjection()
+
+    user_id = UnicodeAttribute(hash_key=True)
+    created_at = UTCDateTimeAttribute(range_key=True)
+
+
+class PostBookmarkIndex(GlobalSecondaryIndex):
+    class Meta:
+        index_name = "post-bookmarks-index"
+        projection = AllProjection()
+
+    post_id = UnicodeAttribute(hash_key=True)
+    created_at = UTCDateTimeAttribute(range_key=True)
+
+
+class BookmarkModel(Model):
+    """
+    Bookmarks model for posts
+    """
+
+    class Meta:
+        table_name = f"docgram-{STAGE}-bookmarks"
+        region = REGION
+        billing_mode = "PAY_PER_REQUEST"
+
+    # Composite key: post_id#user_id
+    bookmark_id = UnicodeAttribute(hash_key=True)  # post_id#user_id
+    post_id = UnicodeAttribute()
+    user_id = UnicodeAttribute()
+    created_at = UTCDateTimeAttribute(default=datetime.now)
+
+    # GSI for user's bookmarks lookup
+    user_bookmarks_index = UserBookmarkIndex()
+
+    # GSI for post's bookmarks lookup
+    post_bookmarks_index = PostBookmarkIndex()
+
+    @classmethod
+    def create_bookmark_id(cls, post_id: str, user_id: str) -> str:
+        return f"{post_id}#{user_id}"
+
+
 def get_current_user_context(
     user_id: str, target_user_id: str = None, post_id: str = None
 ) -> Dict[str, Any]:
     """
-    Helper function to get context-dependent data (is_following, is_liked)
+    Helper function to get context-dependent data (is_following, is_liked, is_bookmarked)
     Optimized for Lambda by batching queries when possible
     """
     context = {}
@@ -391,5 +436,13 @@ def get_current_user_context(
             context["is_liked"] = True
         except LikeModel.DoesNotExist:
             context["is_liked"] = False
+
+        # Check if current user bookmarked the post
+        bookmark_id = BookmarkModel.create_bookmark_id(post_id, user_id)
+        try:
+            BookmarkModel.get(bookmark_id)
+            context["is_bookmarked"] = True
+        except BookmarkModel.DoesNotExist:
+            context["is_bookmarked"] = False
 
     return context
