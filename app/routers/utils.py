@@ -31,7 +31,7 @@ def get_pdf_page_count(pdf_content: bytes) -> int:
         return 1
 
 
-async def generate_pdf_thumbnail(pdf_content: bytes, post_id: str) -> Optional[str]:
+def generate_pdf_thumbnail(pdf_content: bytes, post_id: str) -> Optional[str]:
     """Generate thumbnail from first page of PDF"""
     try:
         with fitz.Document(stream=pdf_content, filetype="pdf") as pdf_doc:

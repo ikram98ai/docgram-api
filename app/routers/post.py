@@ -207,7 +207,7 @@ async def create_post(
         pdf_url = upload_to_s3(pdf_content, pdf_key, "application/pdf")
 
         # Generate thumbnail
-        thumbnail_url = await generate_pdf_thumbnail(pdf_content, post_id)
+        thumbnail_url = generate_pdf_thumbnail(pdf_content, post_id)
 
         # Create post in DynamoDB
         post = PostModel(
