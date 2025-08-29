@@ -9,7 +9,7 @@ from fastapi import APIRouter
 import boto3
 
 # Import our models
-from ..models import UserModel, FollowModel, get_current_user_context
+from ..models import UserModel, FollowModel, get_current_user_context, BookmarkModel
 from ..schemas import User, UserUpdateRequest, Post
 from ..models import PostModel
 from ..utils import upload_to_s3
@@ -83,7 +83,7 @@ async def update_user_profile(
             # Upload avatar to S3
             avatar_content = await avatar_file.read()
             avatar_key = f"{STAGE}/avatars/{current_user.user_id}_{uuid.uuid4()}.jpg"
-            avatar_url = await upload_to_s3(avatar_content, avatar_key, "image/jpeg")
+            avatar_url = upload_to_s3(avatar_content, avatar_key, "image/jpeg")
             current_user.avatar_url = avatar_url
 
         # Update user fields
@@ -295,6 +295,7 @@ async def get_user_profile(
                 comments_count=post.comments_count,
                 shares_count=post.shares_count,
                 is_liked=context.get("is_liked", False),
+                is_bookmarked=context.get("is_bookmarked", False),
                 created_at=post.created_at,
             ).model_dump()
 
@@ -435,4 +436,91 @@ async def get_user_following(
 
     except Exception as e:
         logger.error(f"Error getting following for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/{user_id}/bookmarks", response_model=List[Post])
+async def get_user_bookmarks(
+    user_id: str = Path(...),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    current_user_id: str = Depends(get_current_user_id),
+):
+    """Get user's bookmarked posts"""
+    try:
+        # For privacy, only allow users to see their own bookmarks
+        if user_id != current_user_id:
+            raise HTTPException(
+                status_code=403, detail="You can only view your own bookmarks."
+            )
+
+        # 1. Get all bookmark items for the user
+        all_bookmarks = list(BookmarkModel.user_bookmarks_index.query(hash_key=user_id))
+
+        # 2. Sort bookmarks by creation date (newest first)
+        all_bookmarks.sort(key=lambda b: b.created_at, reverse=True)
+
+        # 3. Apply pagination to the list of bookmark items
+        paginated_bookmarks = all_bookmarks[offset : offset + limit]
+
+        # 4. Fetch the full post details for the paginated bookmarks
+        posts = []
+        for bookmark in paginated_bookmarks:
+            try:
+                post = PostModel.get(bookmark.post_id)
+                user = UserModel.get(post.user_id)
+
+                # Get context for the post (e.g., is_liked by the current user)
+                context = get_current_user_context(
+                    current_user_id, post_id=post.post_id
+                )
+
+                user_dict = User(
+                    user_id=user.user_id,
+                    username=user.username,
+                    email=user.email,
+                    full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+                    bio=user.bio,
+                    avatar_url=user.avatar_url,
+                    followers_count=user.followers_count,
+                    following_count=user.following_count,
+                    posts_count=user.posts_count,
+                    created_at=user.created_at,
+                ).model_dump()
+
+                post_dict = Post(
+                    post_id=post.post_id,
+                    user_id=post.user_id,
+                    user=user_dict,
+                    title=post.title,
+                    description=post.description,
+                    pdf_url=post.pdf_url,
+                    thumbnail_url=post.thumbnail_url,
+                    file_size=post.file_size,
+                    page_count=post.page_count,
+                    likes_count=post.likes_count,
+                    comments_count=post.comments_count,
+                    shares_count=post.shares_count,
+                    is_liked=context.get("is_liked", False),
+                    is_bookmarked=True,  # Always true since we are fetching bookmarks
+                    created_at=post.created_at,
+                ).model_dump()
+
+                posts.append(post_dict)
+
+            except PostModel.DoesNotExist:
+                # If a bookmarked post was deleted, skip it
+                logger.warning(
+                    f"Bookmarked post {bookmark.post_id} not found, skipping."
+                )
+                continue
+            except UserModel.DoesNotExist:
+                logger.warning(
+                    f"User for post {bookmark.post_id} not found, skipping."
+                )
+                continue
+
+        return posts
+
+    except Exception as e:
+        logger.error(f"Error getting bookmarks for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
