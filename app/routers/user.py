@@ -3,7 +3,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
-from fastapi import HTTPException, Depends, UploadFile, File, Query, Path
+from fastapi import HTTPException, Depends, UploadFile, File, Query, Path, Form
 from ..dependencies import get_current_user_id
 from fastapi import APIRouter
 import boto3
@@ -60,12 +60,19 @@ async def get_current_user_info(
 
 @router.put("/profile", response_model=User)
 async def update_user_profile(
-    update_data: UserUpdateRequest = None,
+    update_data: Optional[str] = Form(None),
     avatar_file: Optional[UploadFile] = File(None),
     current_user_id: UserModel = Depends(get_current_user_id),
 ):
-    """Update user profile (ProfileUpdateView equivalent)"""
+    """Update user profile"""
+    print("Update data before parsed:", update_data  )
+
+    if update_data:
+        update_data = UserUpdateRequest.model_validate_json(update_data)
+
     try:
+        print("Update data after parsed:", update_data  )
+        print("Avatar file:", avatar_file)
         current_user = await get_user_by_id(current_user_id)
         # Handle avatar upload if provided
         if avatar_file:
@@ -283,7 +290,7 @@ async def get_user_profile(
             context = get_current_user_context(current_user_id, post_id=post.post_id)
 
             post_dict = Post(
-                post_id=post.post_id,
+                id=post.post_id,
                 user_id=post.user_id,
                 title=post.title,
                 description=post.description,
@@ -308,7 +315,7 @@ async def get_user_profile(
             user_id=user.user_id,
             username=user.username,
             email=user.email,
-            full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+            full_name=f"{user.first_name or ''} {user.last_name or ''}",
             bio=user.bio,
             avatar_url=user.avatar_url,
             followers_count=user.followers_count,
@@ -359,7 +366,7 @@ async def get_user_followers(
                         user_id=user.user_id,
                         username=user.username,
                         email=user.email,
-                        full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+                        full_name=f"{user.first_name or ''} {user.last_name or ''}",
                         bio=user.bio,
                         avatar_url=user.avatar_url,
                         followers_count=user.followers_count,
@@ -413,7 +420,7 @@ async def get_user_following(
                         user_id=user.user_id,
                         username=user.username,
                         email=user.email,
-                        full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+                        full_name=f"{user.first_name or ''} {user.last_name or ''}",
                         bio=user.bio,
                         avatar_url=user.avatar_url,
                         followers_count=user.followers_count,
@@ -478,7 +485,7 @@ async def get_user_bookmarks(
                     user_id=user.user_id,
                     username=user.username,
                     email=user.email,
-                    full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+                    full_name=f"{user.first_name or ''} {user.last_name or ''}",
                     bio=user.bio,
                     avatar_url=user.avatar_url,
                     followers_count=user.followers_count,
@@ -488,7 +495,7 @@ async def get_user_bookmarks(
                 ).model_dump()
 
                 post_dict = Post(
-                    post_id=post.post_id,
+                    id=post.post_id,
                     user_id=post.user_id,
                     user=user_dict,
                     title=post.title,

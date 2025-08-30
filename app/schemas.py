@@ -49,7 +49,7 @@ class User(BaseModel):
 
 
 class Post(BaseModel):
-    id: str = Field(alias="post_id")
+    id: str 
     user_id: str
     user: Optional[User] = None  # Nested user object
     title: str

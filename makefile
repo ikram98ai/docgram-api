@@ -12,7 +12,7 @@ format:
 	uv run ruff format
 
 dev: 
-	uv run fastapi run
+	uv run fastapi dev app/main.py --reload
 
 
 

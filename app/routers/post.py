@@ -77,7 +77,7 @@ async def list_posts(
                     user_id=user.user_id,
                     username=user.username,
                     email=user.email,
-                    full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+                    full_name=f"{user.first_name or ''} {user.last_name or ''}",
                     bio=user.bio,
                     avatar_url=user.avatar_url,
                     followers_count=user.followers_count,
@@ -92,7 +92,7 @@ async def list_posts(
                 )
 
                 post_dict = Post(
-                    post_id=post.post_id,
+                    id=post.post_id,
                     user_id=post.user_id,
                     user=user_dict,
                     title=post.title,
@@ -138,7 +138,7 @@ async def get_post_detail(
             user_id=user.user_id,
             username=user.username,
             email=user.email,
-            full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+            full_name=f"{user.first_name or ''} {user.last_name or ''}",
             bio=user.bio,
             avatar_url=user.avatar_url,
             followers_count=user.followers_count,
@@ -148,7 +148,7 @@ async def get_post_detail(
         ).dict()
 
         return Post(
-            post_id=post.post_id,
+            id=post.post_id,
             user_id=post.user_id,
             user=user_dict,
             title=post.title,
@@ -213,7 +213,7 @@ async def create_post(
 
         # Create post in DynamoDB
         post = PostModel(
-            post_id=post_id,
+            id=post_id,
             user_id=current_user_id,
             title=title,
             description=description,
@@ -240,7 +240,7 @@ async def create_post(
             user_id=user.user_id,
             username=user.username,
             email=user.email,
-            full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+            full_name=f"{user.first_name or ''} {user.last_name or ''}",
             bio=user.bio,
             avatar_url=user.avatar_url,
             followers_count=user.followers_count,
@@ -250,7 +250,7 @@ async def create_post(
         ).dict()
 
         return Post(
-            post_id=post.post_id,
+            id=post.post_id,
             user_id=post.user_id,
             user=user_dict,
             title=post.title,
@@ -304,7 +304,7 @@ async def update_post(
             user_id=user.user_id,
             username=user.username,
             email=user.email,
-            full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+            full_name=f"{user.first_name or ''} {user.last_name or ''}",
             bio=user.bio,
             avatar_url=user.avatar_url,
             followers_count=user.followers_count,
@@ -314,7 +314,7 @@ async def update_post(
         ).dict()
 
         return Post(
-            post_id=post.post_id,
+            id=post.post_id,
             user_id=post.user_id,
             user=user_dict,
             title=post.title,
@@ -620,7 +620,7 @@ async def search_posts(
                     user_id=user.user_id,
                     username=user.username,
                     email=user.email,
-                    full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+                    full_name=f"{user.first_name or ''} {user.last_name or ''}",
                     bio=user.bio,
                     avatar_url=user.avatar_url,
                     followers_count=user.followers_count,
@@ -630,7 +630,7 @@ async def search_posts(
                 ).dict()
 
                 post_dict = Post(
-                    post_id=post.post_id,
+                    id=post.post_id,
                     user_id=post.user_id,
                     user=user_dict,
                     title=post.title,
@@ -729,7 +729,7 @@ async def get_post_comments(
                         user_id=user.user_id,
                         username=user.username,
                         email=user.email,
-                        full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+                        full_name=f"{user.first_name or ''} {user.last_name or ''}",
                         bio=user.bio,
                         avatar_url=user.avatar_url,
                         followers_count=user.followers_count,
@@ -794,7 +794,7 @@ async def create_comment(
             user_id=user.user_id,
             username=user.username,
             email=user.email,
-            full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+            full_name=f"{user.first_name or ''} {user.last_name or ''}",
             bio=user.bio,
             avatar_url=user.avatar_url,
             followers_count=user.followers_count,
@@ -871,7 +871,7 @@ async def get_user_feed(
                     user_id=user.user_id,
                     username=user.username,
                     email=user.email,
-                    full_name=f"{user.first_name or ''} {user.last_name or ''}".strip(),
+                    full_name=f"{user.first_name or ''} {user.last_name or ''}",
                     bio=user.bio,
                     avatar_url=user.avatar_url,
                     followers_count=user.followers_count,
@@ -881,7 +881,7 @@ async def get_user_feed(
                 ).dict()
 
                 post_dict = Post(
-                    post_id=post.post_id,
+                    id=post.post_id,
                     user_id=post.user_id,
                     user=user_dict,
                     title=post.title,
