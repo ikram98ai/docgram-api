@@ -122,6 +122,83 @@ async def list_posts(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+
+@router.get("/search", response_model=List[Post])
+async def search_posts(
+    q: str = Query(..., min_length=1),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=50),
+    current_user_id: str = Depends(get_current_user_id),
+):
+    """Search posts by title"""
+    try:
+        # Note: DynamoDB doesn't have native text search
+        # You might want to use OpenSearch/Elasticsearch for better search
+        # For now, we'll do a scan with filter (not optimal for large datasets)
+
+        posts = []
+        for post in PostModel.scan(
+            filter_condition=PostModel.title.contains(q) | PostModel.title.contains(q.lower()) | PostModel.title.contains(q.title())
+        ):
+            posts.append(post)
+
+        # Sort by creation date (newest first)
+        posts.sort(key=lambda x: x.created_at, reverse=True)
+
+        # Apply pagination
+        paginated_posts = posts[offset : offset + limit]
+
+        # Convert to response format
+        result = []
+        for post in paginated_posts:
+            try:
+                user = UserModel.get(post.user_id)
+                context = get_current_user_context(
+                    current_user_id, post_id=post.post_id
+                )
+
+                user_dict = User(
+                    user_id=user.user_id,
+                    username=user.username,
+                    email=user.email,
+                    full_name=f"{user.first_name or ''} {user.last_name or ''}",
+                    bio=user.bio,
+                    avatar_url=user.avatar_url,
+                    followers_count=user.followers_count,
+                    following_count=user.following_count,
+                    posts_count=user.posts_count,
+                    created_at=user.created_at,
+                ).dict()
+
+                post_dict = Post(
+                    id=post.post_id,
+                    user_id=post.user_id,
+                    user=user_dict,
+                    title=post.title,
+                    description=post.description,
+                    pdf_url=post.pdf_url,
+                    thumbnail_url=post.thumbnail_url,
+                    file_size=post.file_size,
+                    page_count=post.page_count,
+                    likes_count=post.likes_count,
+                    comments_count=post.comments_count,
+                    shares_count=post.shares_count,
+                    is_liked=context.get("is_liked", False),
+                    created_at=post.created_at,
+                ).dict()
+
+                result.append(post_dict)
+
+            except UserModel.DoesNotExist:
+                continue
+            
+        return result
+
+    except Exception as e:
+        logger.error(f"Error searching posts: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/{post_id}", response_model=Post)
 async def get_post_detail(
     post_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
@@ -579,83 +656,6 @@ async def generate_assistant_response(message_id: str, query: str, post_id: str)
             logger.error(
                 f"Error generating response after 1st exeption for message {message_id}: {e}"
             )
-
-
-@router.get("/search", response_model=List[Post])
-async def search_posts(
-    q: str = Query(..., min_length=1),
-    offset: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=50),
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Search posts by title"""
-    try:
-        # Note: DynamoDB doesn't have native text search
-        # You might want to use OpenSearch/Elasticsearch for better search
-        # For now, we'll do a scan with filter (not optimal for large datasets)
-
-        posts = []
-        for post in PostModel.scan(
-            filter_condition=PostModel.title.contains(q.lower())
-            & PostModel.is_public==1 
-        ):
-            posts.append(post)
-
-        # Sort by creation date (newest first)
-        posts.sort(key=lambda x: x.created_at, reverse=True)
-
-        # Apply pagination
-        paginated_posts = posts[offset : offset + limit]
-
-        # Convert to response format
-        result = []
-        for post in paginated_posts:
-            try:
-                user = UserModel.get(post.user_id)
-                context = get_current_user_context(
-                    current_user_id, post_id=post.post_id
-                )
-
-                user_dict = User(
-                    user_id=user.user_id,
-                    username=user.username,
-                    email=user.email,
-                    full_name=f"{user.first_name or ''} {user.last_name or ''}",
-                    bio=user.bio,
-                    avatar_url=user.avatar_url,
-                    followers_count=user.followers_count,
-                    following_count=user.following_count,
-                    posts_count=user.posts_count,
-                    created_at=user.created_at,
-                ).dict()
-
-                post_dict = Post(
-                    id=post.post_id,
-                    user_id=post.user_id,
-                    user=user_dict,
-                    title=post.title,
-                    description=post.description,
-                    pdf_url=post.pdf_url,
-                    thumbnail_url=post.thumbnail_url,
-                    file_size=post.file_size,
-                    page_count=post.page_count,
-                    likes_count=post.likes_count,
-                    comments_count=post.comments_count,
-                    shares_count=post.shares_count,
-                    is_liked=context.get("is_liked", False),
-                    created_at=post.created_at,
-                ).dict()
-
-                result.append(post_dict)
-
-            except UserModel.DoesNotExist:
-                continue
-
-        return result
-
-    except Exception as e:
-        logger.error(f"Error searching posts: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/{post_id}/visibility")
