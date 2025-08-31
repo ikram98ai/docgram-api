@@ -1,118 +1,280 @@
 import os
 import io
-import uuid
+import logging
 from markitdown import MarkItDown
 from openai import OpenAI
 from pinecone import Pinecone, ServerlessSpec
 from dotenv import load_dotenv
-from fastapi import UploadFile
+from typing import List, Dict, Optional, Tuple
+from uuid import uuid4
 
 load_dotenv()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Initialize clients and configuration from environment variables
-EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-small")
+# Config
+EMBED_MODEL = os.getenv("OPENAI_MODEL", "text-embedding-004")
+EMBED_DIM = int(os.getenv("PINECONE_DIM", 768))
 PINECONE_INDEX = os.getenv("PINECONE_INDEX", "docgram-index")
-EMBED_DIM = int(os.getenv("PINECONE_DIM", 1536))
 PINECONE_REGION = os.getenv("PINECONE_REGION", "us-east-1")
 
-client = OpenAI()
-pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 
-def create_index():
-    """Creates the Pinecone index if it doesn't already exist."""
-    if PINECONE_INDEX not in pc.list_indexes().names():
-        print(f"Creating Pinecone index: {PINECONE_INDEX}")
-        spec = ServerlessSpec(cloud="aws", region=PINECONE_REGION)
-        pc.create_index(
-            name=PINECONE_INDEX,
-            dimension=EMBED_DIM,
-            metric="cosine",  # Cosine similarity is often better for normalized embeddings
-            spec=spec
-        )
-        print(f"Successfully Created Pinecone index: {PINECONE_INDEX}")
-
-# Call create_index at the module level to ensure the index exists when the app starts.
-create_index()
-
-async def upsert_data(pdf: UploadFile, post_id: str) -> str:
+def _smart_chunk_text(text: str, chunk_size: int, overlap: int) -> List[Tuple[str, int, int]]:
     """
-    Processes a PDF file, chunks its content, creates embeddings, and upserts them to Pinecone.
+    Chunk text at word boundaries. Returns list of (chunk_text, start_offset, end_offset)
     """
-    index = pc.Index(PINECONE_INDEX)
-    md = MarkItDown()
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be > 0")
+    tokens = text.split()  # simple whitespace tokenization (keeps code dependency-free)
+    if not tokens:
+        return []
 
-    try:
-        file_bytes = await pdf.read()
+    # Reconstruct windows of tokens up to approx chunk_size characters
+    chunks = []
+    token_positions = []  # store (token, start_pos, end_pos)
+    pos = 0
+    for token in tokens:
+        # find next occurrence of token in text from pos
+        find_at = text.find(token, pos)
+        if find_at == -1:
+            # fallback: approximate
+            find_at = pos
+        token_positions.append((token, find_at, find_at + len(token)))
+        pos = find_at + len(token)
+
+    i = 0
+    n = len(token_positions)
+    while i < n:
+        # accumulate tokens until approx chunk_size
+        start_pos = token_positions[i][1]
+        chunk_tokens = []
+        j = i
+        end_pos = start_pos
+        while j < n:
+            token, s, e = token_positions[j]
+            approx_len = (e - start_pos)
+            if approx_len > chunk_size and chunk_tokens:
+                break
+            chunk_tokens.append(token)
+            end_pos = e
+            j += 1
+        chunk_text = text[start_pos:end_pos]
+        chunks.append((chunk_text.strip(), start_pos, end_pos))
+        # advance i: go forward by token window minus overlap (in chars)
+        # find next i such that token_positions[next_i].1 >= end_pos - overlap_chars
+        overlap_target = max(start_pos, end_pos - overlap)
+        next_i = j
+        while next_i < n and token_positions[next_i][1] < overlap_target:
+            next_i += 1
+        if next_i == i:  # ensure progress
+            next_i = j
+        i = next_i
+    return chunks
+
+
+class RAGIndexer:
+    def __init__(self,
+                 pinecone_client: Pinecone,
+                 openai_client: OpenAI,
+                 index_name: str = PINECONE_INDEX,
+                 embed_model: str = EMBED_MODEL,
+                 embed_dim: int = EMBED_DIM,
+                 pinecone_region: str = PINECONE_REGION):
+        self.pc = pinecone_client
+        self.client = openai_client
+        self.index_name = index_name
+        self.embed_model = embed_model
+        self.embed_dim = embed_dim
+        self.region = pinecone_region
+
+    def create_index_if_not_exists(self) -> None:
+        if not self.pc.has_index(self.index_name):
+            logger.info(f"Creating Pinecone index: {self.index_name}")
+            spec = ServerlessSpec(cloud="aws", region=self.region)
+            self.pc.create_index(
+                self.index_name,
+                vector_type="dense",
+                metric="dotproduct",
+                dimension=self.embed_dim,
+                spec=spec
+            )
+            logger.info("Index created.")
+
+        # sanity: check dimension (best-effort)
+        # NOTE: Pinecone SDK specific methods differ by version; adapt if required.
+        logger.debug("Index exists or was created.")
+
+    async def _extract_text_from_pdf(self, file_bytes: bytes) -> str:
+        md = MarkItDown()
         buffer = io.BytesIO(file_bytes)
-        
-        # Convert PDF to markdown and then get text content
         result = md.convert(buffer)
-        
-        # Chunk the text content by paragraphs
-        chunks = result.text_content.split('\n\n')
-        
-        batch_size = 32
-        vectors_to_upsert = []
+        # Use filename without extension as prefix
+        text_content = result.text_content if hasattr(result, "text_content") else str(result)
+        return text_content
 
-        for i in range(0, len(chunks), batch_size):
-            batch_chunks = chunks[i:i + batch_size]
-            
-            # Filter out empty chunks
-            batch_chunks = [chunk for chunk in batch_chunks if chunk.strip()]
-            if not batch_chunks:
-                continue
+    async def pdf_to_chunks(self,
+                            pdf_bytes: bytes,
+                            chunk_size: int = 1000,
+                            overlap: int = 200) -> List[Dict]:
+        """
+        Returns list of dicts:
+            {"chunk_id": str, "text": str, "source": filename, "start": int, "end": int}
+        """
+        content = await self._extract_text_from_pdf(pdf_bytes)
+        chunks_meta = _smart_chunk_text(content, chunk_size=chunk_size, overlap=overlap)
+        chunks = []
+        for idx, (chunk_text, start, end) in enumerate(chunks_meta):
+            chunks.append({
+                "chunk_id": f"{uuid4().hex}",
+                "text": chunk_text,
+                "source": pdf_bytes.filename,
+                "start": start,
+                "end": end,
+                "length": end - start
+            })
+        return chunks
 
-            # Create embeddings for the current batch.
-            res = client.embeddings.create(input=batch_chunks, model=EMBED_MODEL)
-            embeds = [record.embedding for record in res.data]
-            
-            # Prepare vectors for upsert
-            for chunk, dense_embedding in zip(batch_chunks, embeds):
-                vectors_to_upsert.append({
-                    "id": str(uuid.uuid4()),
-                    "values": dense_embedding,
-                    "metadata": {"content": chunk, "post_id": post_id}
-                })
+    def _batch_iter(self, items: List, batch_size: int):
+        for i in range(0, len(items), batch_size):
+            yield items[i:i + batch_size], i, min(i + batch_size, len(items))
 
-        # Upsert all vectors in a single call if possible, or batch if the list is too large
-        if vectors_to_upsert:
-            index.upsert(vectors=vectors_to_upsert)
+    def _safe_create_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """
+        Create embeddings for a list of texts with simple retries.
+        """
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                res = self.client.embeddings.create(input=texts, model=self.embed_model)
+                embeds = [record.embedding for record in res.data]
+                return embeds
+            except Exception as e:
+                logger.warning(f"Embedding request failed (attempt {attempt}): {e}")
+                if attempt == max_retries:
+                    raise
+        return []
 
-        print(f"Upsert of {len(vectors_to_upsert)} vectors for post_id '{post_id}' completed successfully.")
-        return f"Upsert of {len(vectors_to_upsert)} vectors completed successfully."
+    def upsert_chunks(self,
+                      chunks: List[Dict],
+                      post_id: Optional[str] = None,
+                      batch_size: int = 32) -> str:
+        """
+        Upsert chunks into pinecone. Returns summary dict with counts.
+        """
+        if not chunks:
+            return {"upserted": 0}
+        self.create_index_if_not_exists()
+        index = self.pc.Index(self.index_name)
 
-    except Exception as e:
-        print(f"Error during upsert for post_id '{post_id}': {e}")
-        return f"Error during upsert: {e}"
+        total_upserted = 0
+        for batch, start_idx, end_idx in self._batch_iter(chunks, batch_size):
+            try:
+                texts = [c["text"] for c in batch]
+                ids = [c["chunk_id"] for c in batch]
 
+                embeddings = self._safe_create_embeddings(texts)
+                if len(embeddings) != len(texts):
+                    raise RuntimeError("Embedding length mismatch")
 
-def search_index(query_text: str, post_id: str, top_k: int = 3) -> list[dict]:
-    """Search index for a given query and post_id, returning matches with metadata."""
-    index = pc.Index(PINECONE_INDEX)
+                vectors = []
+                for _id, emb, c in zip(ids, embeddings, batch):
+                    metadata = {
+                        "source": c.get("source"),
+                        "post_id": post_id,
+                        "start": c.get("start"),
+                        "end": c.get("end"),
+                        "length": c.get("length")
+                    }
+                    vectors.append({"id": str(_id), "values": emb, "metadata": metadata})
 
-    # Generate embedding for the query text
-    response = client.embeddings.create(input=[query_text], model=EMBED_MODEL)
-    dense_embedding = response.data[0].embedding
+                # Upsert
+                resp = index.upsert(vectors=vectors)
+                total_upserted += len(vectors)
+                logger.info(f"Upserted batch {start_idx}:{end_idx} -> {len(vectors)} vectors")
+            except Exception as e:
+                logger.exception(f"Failed to upsert batch {start_idx}:{end_idx}: {e}")
+                # continue with remaining batches
+        return f"upserted {total_upserted} chunks"
 
-    query_params = {
-        "vector": dense_embedding,
-        "top_k": top_k,
-        "include_metadata": True,
-        "filter": {"post_id": post_id}
-    }
+    def upsert_pdf(self,
+                   pdf_bytes: bytes,
+                   post_id: Optional[str] = None,
+                   chunk_size: int = 1000,
+                   overlap: int = 200,
+                   batch_size: int = 32) -> str:
+        """
+        High-level helper: read PDF (async UploadFile) and upsert chunks.
+        This function is synchronous wrapper: user should await pdf.read before calling
+        or call inside async context (we used async only for reading).
+        """
+        import asyncio
+        chunks = asyncio.get_event_loop().run_until_complete(
+            self.pdf_to_chunks(pdf_bytes, chunk_size=chunk_size, overlap=overlap)
+        )
+        return self.upsert_chunks(chunks, post_id=post_id, batch_size=batch_size)
 
-    res = index.query(**query_params)
-    matches = res.get("matches", [])
-    
-    return [{**m.get("metadata", {}), "score": m.get("score"), "id": m.get("id")} for m in matches]
+    def retrieval(self,
+                  query_text: str,
+                  post_id: Optional[str] = None,
+                  top_k: int = 5,
+                  include_metadata: bool = True) -> List[Dict]:
+        """
+        Returns list of matches: {"id", "score", "metadata", "text"}
+        """
+        if not query_text:
+            return []
 
-def retrieval(query_text: str, post_id: str) -> str:
-    """Retrieves relevant context from the index for a given query and post_id."""
-    matches = search_index(query_text, post_id)
+        index = self.pc.Index(self.index_name)
+        emb_res = self.client.embeddings.create(input=query_text, model=self.embed_model)
+        dense_embedding = emb_res.data[0].embedding
 
-    final_context = ""
-    for match in matches:
-        final_context += f"Source: {match.get('source', 'N/A')}\n"
-        final_context += f"{match.get('content', '')}\n---\n"
+        query_filter = {"post_id": post_id} if post_id is not None else None
 
-    return final_context
+        query_kwargs = {
+            "vector": dense_embedding,
+            "top_k": top_k,
+            "include_metadata": include_metadata
+        }
+        if query_filter:
+            query_kwargs["filter"] = query_filter
+
+        res = index.query(**query_kwargs)
+        matches = res.get("matches", []) if isinstance(res, dict) else getattr(res, "matches", [])
+
+        results = []
+        for m in matches:
+            metadata = m.get("metadata", {}) if isinstance(m, dict) else getattr(m, "metadata", {})
+            text = metadata.get("text") or metadata.get("content") or metadata.get("source")  # fallback
+            # In our upsert we stored only metadata fields; the original chunk text isn't stored in metadata by default.
+            # If you want chunk text in retrieval, include it in metadata at upsert time (metadata["text"] = chunk_text).
+            results.append({
+                "id": m.get("id"),
+                "score": m.get("score", m.get("payload", {}).get("score") if isinstance(m, dict) else None),
+                "metadata": metadata,
+            })
+        return results
+
+    def build_prompt(self, query: str, contexts: List[Dict], max_context_chars: int = 4000) -> str:
+        """
+        Build a prompt (context + query) for an LLM. Truncates contexts to the most relevant until char budget is reached.
+        """
+        assembled = ""
+        for c in contexts:
+            meta = c.get("metadata", {})
+            src = meta.get("source", "unknown")
+            snippet = meta.get("text") or meta.get("content") or ""
+            candidate = f"Source: {src}\n{snippet}\n---\n"
+            if len(assembled) + len(candidate) > max_context_chars:
+                break
+            assembled += candidate
+        prompt = f"""You are an assistant. Use the following context to answer the user's question. Cite the 'Source' lines when relevant.
+
+Context:
+{assembled}
+
+User question:
+{query}
+
+Answer concisely and cite sources where useful."""
+        return prompt
+
