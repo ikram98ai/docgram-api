@@ -11,6 +11,18 @@ from ..models import (
     UserModel,
     PostModel
 )
+from dotenv import load_dotenv
+from ..ai.rag import RAGIndexer
+import os
+from openai import OpenAI
+from pinecone import Pinecone
+
+load_dotenv()
+
+gemini_base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+client = OpenAI( base_url=gemini_base_url, api_key=os.getenv("GEMINI_API_KEY"))
+pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -67,13 +79,15 @@ async def get_post_by_id(post_id: str) -> PostModel:
 
 
 # Background task functions
-async def process_pdf_embeddings(pdf_content: bytes, post_id: str, title: str):
+async def process_pdf_embeddings(pdf_content: bytes, post_id: str):
     """Background task to process PDF for embeddings"""
     try:
-        # TODO: Implement your PDF processing logic here
-        # This should extract text and create embeddings for vector search
+        # This extract text and create embeddings for vector search
         logger.info(f"Processing PDF embeddings for post {post_id}")
-        # process_file(file_content=pdf_content, book_id=post_id)
+        rag = RAGIndexer(pc, client)
+        rag.create_index_if_not_exists()
+        result = rag.upsert_pdf(pdf_content, post_id=post_id)
+
     except Exception as e:
         logger.error(f"PDF processing error for {post_id}: {e}")
 
