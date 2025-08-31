@@ -1,22 +1,21 @@
-import os
 import io
 import logging
 from markitdown import MarkItDown
 from openai import OpenAI
 from pinecone import Pinecone, ServerlessSpec
-from dotenv import load_dotenv
 from typing import List, Dict, Optional, Tuple
 from uuid import uuid4
+from ..config import settings
 
-load_dotenv()
+()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Config
-EMBED_MODEL = os.getenv("OPENAI_MODEL", "text-embedding-004")
-EMBED_DIM = int(os.getenv("PINECONE_DIM", 768))
-PINECONE_INDEX = os.getenv("PINECONE_INDEX", "docgram-index")
-PINECONE_REGION = os.getenv("PINECONE_REGION", "us-east-1")
+EMBED_MODEL = "text-embedding-004"
+EMBED_DIM =  768
+PINECONE_INDEX = "docgram-index"
+PINECONE_REGION = "us-east-1"
 
 
 def _smart_chunk_text(text: str, chunk_size: int, overlap: int) -> List[Tuple[str, int, int]]:
@@ -127,7 +126,6 @@ class RAGIndexer:
             chunks.append({
                 "chunk_id": f"{uuid4().hex}",
                 "text": chunk_text,
-                "source": pdf_bytes.filename,
                 "start": start,
                 "end": end,
                 "length": end - start
@@ -179,7 +177,7 @@ class RAGIndexer:
                 vectors = []
                 for _id, emb, c in zip(ids, embeddings, batch):
                     metadata = {
-                        "source": c.get("source"),
+                        "text": c.get("text"),
                         "post_id": post_id,
                         "start": c.get("start"),
                         "end": c.get("end"),
@@ -196,7 +194,7 @@ class RAGIndexer:
                 # continue with remaining batches
         return f"upserted {total_upserted} chunks"
 
-    def upsert_pdf(self,
+    async def upsert_pdf(self,
                    pdf_bytes: bytes,
                    post_id: Optional[str] = None,
                    chunk_size: int = 1000,
@@ -204,13 +202,9 @@ class RAGIndexer:
                    batch_size: int = 32) -> str:
         """
         High-level helper: read PDF (async UploadFile) and upsert chunks.
-        This function is synchronous wrapper: user should await pdf.read before calling
-        or call inside async context (we used async only for reading).
+        This function is now async; await pdf.read before calling.
         """
-        import asyncio
-        chunks = asyncio.get_event_loop().run_until_complete(
-            self.pdf_to_chunks(pdf_bytes, chunk_size=chunk_size, overlap=overlap)
-        )
+        chunks = await self.pdf_to_chunks(pdf_bytes, chunk_size=chunk_size, overlap=overlap)
         return self.upsert_chunks(chunks, post_id=post_id, batch_size=batch_size)
 
     def retrieval(self,
@@ -278,3 +272,10 @@ User question:
 Answer concisely and cite sources where useful."""
         return prompt
 
+
+
+def get_rag_instance() -> RAGIndexer:
+    gemini_base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    client = OpenAI( base_url=gemini_base_url, api_key=settings.gemini_api_key )
+    pc = Pinecone(api_key=settings.pinecone_api_key)
+    return RAGIndexer(pc, client)

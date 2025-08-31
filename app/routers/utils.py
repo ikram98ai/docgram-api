@@ -11,19 +11,9 @@ from ..models import (
     UserModel,
     PostModel
 )
-from dotenv import load_dotenv
-from ..ai.rag import RAGIndexer
 import os
-from openai import OpenAI
-from pinecone import Pinecone
-
-load_dotenv()
-
-gemini_base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-client = OpenAI( base_url=gemini_base_url, api_key=os.getenv("GEMINI_API_KEY"))
-pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-
-
+from ..ai.rag import get_rag_instance
+from ..ai.ai_agents import agent_runner
 # Configure logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -84,20 +74,21 @@ async def process_pdf_embeddings(pdf_content: bytes, post_id: str):
     try:
         # This extract text and create embeddings for vector search
         logger.info(f"Processing PDF embeddings for post {post_id}")
-        rag = RAGIndexer(pc, client)
+        rag = get_rag_instance()
         rag.create_index_if_not_exists()
-        result = rag.upsert_pdf(pdf_content, post_id=post_id)
-
+        result = await rag.upsert_pdf(pdf_content, post_id=post_id)
+        return result
     except Exception as e:
         logger.error(f"PDF processing error for {post_id}: {e}")
 
 
-async def ask_pdf_question(query: str, post_id: str, title: str) -> str:
+async def ask_pdf_question(messages: list[dict[str,str]], post_id: str) -> str:
     """Ask question to PDF using vector search"""
     try:
-        # TODO: Implement your PDF question answering logic here
-        # return ask_pdf(query, post_id, title)
-        return "This is a placeholder response. Implement your PDF QA logic here."
+        logger.info(f"Asking question {messages[-1]["content"]} to PDF for post {post_id}")
+        response = await agent_runner(messages, post_id=post_id)
+        return response
+
     except Exception as e:
         logger.error(f"PDF QA error: {e}")
         return "Sorry, I'm having trouble processing your question right now."

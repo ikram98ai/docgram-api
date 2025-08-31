@@ -208,6 +208,29 @@ async def search_posts(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.delete("/messages/{message_id}")
+async def delete_message(
+    message_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
+):
+    """Delete a chat message"""
+    try:
+        message = ChatMessageModel.get(message_id)
+
+        # Check if user owns the conversation
+        conversation = ChatConversationModel.get(message.conversation_id)
+        if conversation.user_id != current_user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        message.delete()
+        return {"message": "Message deleted successfully"}
+
+    except ChatMessageModel.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Message not found")
+    except Exception as e:
+        logger.error(f"Error deleting message {message_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/{post_id}", response_model=Post)
 async def get_post_detail(
     post_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
@@ -319,7 +342,7 @@ async def create_post(
         user.save()
 
         # Schedule background PDF processing
-        background_tasks.add_task(process_pdf_embeddings, pdf_content, post_id, title)
+        background_tasks.add_task(process_pdf_embeddings, pdf_content, post_id)
 
         # Return created post
         user_dict = User(
@@ -579,7 +602,7 @@ async def post_message(
     try:
         # Find or create conversation
         conversation_id = f"{post_id}#{current_user_id}"
-
+        post = await get_post_by_id(post_id)
         try:
             conversation = ChatConversationModel.get(conversation_id)
         except ChatConversationModel.DoesNotExist:
@@ -612,11 +635,17 @@ async def post_message(
         )
         assistant_message.save()
 
+        query = message_request.query + " in the PDF document titled: " + post.title + "\n Description: " + (post.description or "")
+
+        messages = [
+            {"role": "user", "content": query}
+        ]
+
         # Schedule response generation
         background_tasks.add_task(
             generate_assistant_response,
             assistant_message.message_id,
-            message_request.query,
+            messages,
             post_id,
         )
 
@@ -637,14 +666,12 @@ async def post_message(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-async def generate_assistant_response(message_id: str, query: str, post_id: str):
+async def generate_assistant_response(message_id: str, messages: list[dict[str,str]], post_id: str):
     """Background task to generate AI response"""
     try:
         # Get post info
-        post = PostModel.get(post_id)
-
         # Generate response using your PDF QA system
-        response = await ask_pdf_question(query, post_id, post.title)
+        response = await ask_pdf_question(messages, post_id)
 
         # Update assistant message
         message = ChatMessageModel.get(message_id)
@@ -687,29 +714,6 @@ async def toggle_post_visibility(
 
     except Exception as e:
         logger.error(f"Error toggling visibility for post {post_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.delete("/messages/{message_id}")
-async def delete_message(
-    message_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
-):
-    """Delete a chat message"""
-    try:
-        message = ChatMessageModel.get(message_id)
-
-        # Check if user owns the conversation
-        conversation = ChatConversationModel.get(message.conversation_id)
-        if conversation.user_id != current_user_id:
-            raise HTTPException(status_code=403, detail="Not authorized")
-
-        message.delete()
-        return {"message": "Message deleted successfully"}
-
-    except ChatMessageModel.DoesNotExist:
-        raise HTTPException(status_code=404, detail="Message not found")
-    except Exception as e:
-        logger.error(f"Error deleting message {message_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

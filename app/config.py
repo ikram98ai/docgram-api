@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     aws_region: str = "us-east-1"
 
     gemini_api_key: str
+    pinecone_api_key: str
 
     # dynamodb_endpoint_url: str
 
