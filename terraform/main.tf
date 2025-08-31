@@ -144,6 +144,7 @@ resource "aws_lambda_function" "docgram_lambda" {
   environment {
     variables = {
       GEMINI_API_KEY                = var.gemini_api_key
+      PINECONE_API_KEY              = var.pinecone_api_key
       DEBUG                         = "False"
       SECRET_KEY                    = var.secret_key
       ALGORITHM                     = "HS256"

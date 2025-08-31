@@ -44,6 +44,12 @@ variable "gemini_api_key" {
   sensitive   = true
 }
 
+variable "pinecone_api_key" {
+  description = "Pinecone API key"
+  type        = string
+  sensitive   = true
+}
+
 
 variable "secret_key" {
   description = "Secret key for JWT"

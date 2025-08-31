@@ -14,9 +14,6 @@ format:
 dev: 
 	uv run fastapi dev app/main.py --reload
 
-
-
-
 # deploy:
 # 	@echo "Deploying to AWS Lambda..."
 # 	terraform -chdir=terraform init
@@ -26,6 +23,7 @@ destroy:
 	@echo "Destroying AWS resources..."
 	terraform -chdir=terraform destroy \
 			  -var="gemini_api_key=${GEMINI_API_KEY}" \
+			  -var="pinecone_api_key=${PINECONE_API_KEY}" \
 			  -var="secret_key=${SECRET_KEY}" \
 			  -lock=false
 
@@ -35,4 +33,5 @@ set-secrets:
 	gh secret set AWS_ACCESS_KEY_ID --body ${AWS_ACCESS_KEY_ID}
 	gh secret set AWS_SECRET_ACCESS_KEY --body ${AWS_SECRET_ACCESS_KEY}
 	gh secret set GEMINI_API_KEY --body ${GEMINI_API_KEY}
+	gh secret set PINECONE_API_KEY --body ${PINECONE_API_KEY}
 	gh secret set SECRET_KEY --body ${SECRET_KEY}
