@@ -16,7 +16,14 @@ from fastapi import (
 )
 from ..dependencies import get_current_user_id
 from ..utils import upload_to_s3
-from .utils import get_post_by_id, get_user_by_id, get_pdf_page_count, generate_pdf_thumbnail, process_pdf_embeddings, ask_pdf_question
+from .utils import (
+    get_post_by_id, 
+    get_user_by_id, 
+    get_pdf_page_count, 
+    generate_pdf_thumbnail, 
+    process_pdf_embeddings, 
+    ask_pdf_question
+)
 # Import our models
 from ..models import (
     UserModel,
@@ -107,6 +114,7 @@ async def list_posts(
                     is_liked=context.get("is_liked", False),
                     is_bookmarked=context.get("is_bookmarked", False),
                     created_at=post.created_at,
+                    is_public = post.is_public==1,
                 ).dict()
 
                 result.append(post_dict)
@@ -290,7 +298,7 @@ async def create_post(
 
         # Create post in DynamoDB
         post = PostModel(
-            id=post_id,
+            post_id=post_id,
             user_id=current_user_id,
             title=title,
             description=description,

@@ -2,11 +2,10 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from fastapi import HTTPException, Depends, UploadFile, File, Query, Path, Form
 from ..dependencies import get_current_user_id
 from fastapi import APIRouter
-import boto3
 
 # Import our models
 from ..models import UserModel, FollowModel, get_current_user_context, BookmarkModel
@@ -209,65 +208,7 @@ async def follow_user(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-# @router.post("/{user_id}/follow")
-# async def follow_user(
-#     user_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
-# ):
-#     """Follow or unfollow a user"""
-#     try:
-#         if user_id == current_user_id:
-#             raise HTTPException(status_code=400, detail="Cannot follow yourself")
-
-#         # Check if target user exists
-#         target_user = await get_user_by_id(user_id)
-#         current_user = await get_user_by_id(current_user_id)
-
-#         relationship_id = FollowModel.create_relationship_id(current_user_id, user_id)
-
-#         try:
-#             # Check if already following
-#             existing_follow = FollowModel.get(relationship_id)
-#             # Unfollow
-#             existing_follow.delete()
-
-#             # Update counts
-#             current_user.following_count = max(0, current_user.following_count - 1)
-#             target_user.followers_count = max(0, target_user.followers_count - 1)
-
-#             is_following = False
-
-#         except FollowModel.DoesNotExist:
-#             # Follow
-#             follow = FollowModel(
-#                 relationship_id=relationship_id,
-#                 follower_id=current_user_id,
-#                 following_id=user_id,
-#                 created_at=datetime.now(timezone.utc),
-#             )
-#             follow.save()
-
-#             # Update counts
-#             current_user.following_count += 1
-#             target_user.followers_count += 1
-
-#             is_following = True
-
-#         # Save updated counts
-#         current_user.save()
-#         target_user.save()
-
-#         return {
-#             "is_following": is_following,
-#             "followers_count": target_user.followers_count,
-#             "following_count": current_user.following_count,
-#         }
-
-#     except Exception as e:
-#         logger.error(f"Error following user {user_id}: {e}")
-#         raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/{user_id}/profile", response_model=Dict[str, Any])
+@router.get("/{user_id}/profile", response_model=User)
 async def get_user_profile(
     user_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
 ):
@@ -275,43 +216,10 @@ async def get_user_profile(
     try:
         user = await get_user_by_id(user_id)
 
-        # Get user's posts
-        posts = []
-        query_filter = None
-        if user_id != current_user_id:
-            # Show only public posts for other users
-            query_filter = PostModel.is_public == 1
-
-        for post in PostModel.user_posts_index.query(
-            hash_key=user_id,
-            scan_index_forward=False,  # Newest first
-            filter_condition=query_filter,
-        ):
-            context = get_current_user_context(current_user_id, post_id=post.post_id)
-
-            post_dict = Post(
-                id=post.post_id,
-                user_id=post.user_id,
-                title=post.title,
-                description=post.description,
-                pdf_url=post.pdf_url,
-                thumbnail_url=post.thumbnail_url,
-                file_size=post.file_size,
-                page_count=post.page_count,
-                likes_count=post.likes_count,
-                comments_count=post.comments_count,
-                shares_count=post.shares_count,
-                is_liked=context.get("is_liked", False),
-                is_bookmarked=context.get("is_bookmarked", False),
-                created_at=post.created_at,
-            ).model_dump()
-
-            posts.append(post_dict)
-
         # Get follow context
         context = get_current_user_context(current_user_id, target_user_id=user_id)
 
-        user_dict = User(
+        user = User(
             user_id=user.user_id,
             username=user.username,
             email=user.email,
@@ -323,16 +231,9 @@ async def get_user_profile(
             posts_count=user.posts_count,
             is_following=context.get("is_following", False),
             created_at=user.created_at,
-        ).model_dump()
+        )
 
-        return {
-            "profile_user": user_dict,
-            "posts": posts,
-            "total_posts": len(posts),
-            "total_followers": user.followers_count,
-            "total_following": user.following_count,
-        }
-
+        return user
     except Exception as e:
         logger.error(f"Error getting profile for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -444,6 +345,60 @@ async def get_user_following(
     except Exception as e:
         logger.error(f"Error getting following for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/{user_id}/posts", response_model=List[Post])
+async def get_user_posts(
+    user_id: str = Path(...),     
+    offset: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=50),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Get user profile with posts and stats"""
+    try:
+        # Get user's posts
+        posts = []
+        query_filter = None
+        if user_id != current_user_id:
+            # Show only public posts for other users
+            query_filter = PostModel.is_public == 1
+        all_posts = PostModel.user_posts_index.query(
+            hash_key=user_id,
+            scan_index_forward=False,  # Newest first
+            filter_condition=query_filter,
+        )
+        paginated_posts = list(all_posts)[offset : offset + limit]
+
+        for post in paginated_posts:
+            context = get_current_user_context(current_user_id, post_id=post.post_id)
+
+            post_dict = Post(
+                id=post.post_id,
+                user_id=post.user_id,
+                title=post.title,
+                description=post.description,
+                pdf_url=post.pdf_url,
+                thumbnail_url=post.thumbnail_url,
+                file_size=post.file_size,
+                page_count=post.page_count,
+                likes_count=post.likes_count,
+                comments_count=post.comments_count,
+                shares_count=post.shares_count,
+                is_liked=context.get("is_liked", False),
+                is_bookmarked=context.get("is_bookmarked", False),
+                created_at=post.created_at,
+                is_public = post.is_public==1,
+
+            ).model_dump()
+
+            posts.append(post_dict)
+
+        return posts
+    
+    except Exception as e:
+        logger.error(f"Error getting profile for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.get("/{user_id}/bookmarks", response_model=List[Post])
 async def get_user_bookmarks(

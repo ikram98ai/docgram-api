@@ -64,6 +64,7 @@ class Post(BaseModel):
     is_liked: Optional[bool] = None  # Context-dependent
     is_bookmarked: Optional[bool] = None # Context-dependent
     created_at: datetime
+    is_public: Optional[bool] = True
 
     class Config:
         validate_by_name = True
