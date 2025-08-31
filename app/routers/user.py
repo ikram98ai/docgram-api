@@ -64,14 +64,11 @@ async def update_user_profile(
     current_user_id: UserModel = Depends(get_current_user_id),
 ):
     """Update user profile"""
-    print("Update data before parsed:", update_data  )
 
     if update_data:
         update_data = UserUpdateRequest.model_validate_json(update_data)
 
     try:
-        print("Update data after parsed:", update_data  )
-        print("Avatar file:", avatar_file)
         current_user = await get_user_by_id(current_user_id)
         # Handle avatar upload if provided
         if avatar_file:
@@ -162,6 +159,7 @@ async def follow_user(
 
         # Check if target user exists
         target_user = await get_user_by_id(user_id)
+        current_user = await get_user_by_id(current_user_id)
 
         relationship_id = FollowModel.create_relationship_id(current_user_id, user_id)
 
@@ -170,7 +168,6 @@ async def follow_user(
             existing_follow = FollowModel.get(relationship_id)
             # Unfollow
             existing_follow.delete()
-            current_user = await get_user_by_id(current_user_id)
             # Update counts
             current_user.following_count = max(0, current_user.following_count - 1)
             target_user.followers_count = max(0, target_user.followers_count - 1)

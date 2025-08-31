@@ -113,7 +113,7 @@ async def register_user(user_data: UserRegistrationRequest):
             user_id=user_id,
             username=user_data.username,
             email=user_data.email,
-            password_hash=hashed_password,
+            password=hashed_password,
             first_name=user_data.first_name,
             last_name=user_data.last_name,
             bio=user_data.bio,
