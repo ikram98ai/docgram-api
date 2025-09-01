@@ -126,6 +126,99 @@ async def list_posts(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/feed", response_model=List[Post])
+async def get_user_feed(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=50),
+    current_user_id: str = Depends(get_current_user_id),
+):
+    """Get personalized feed based on following"""
+    try:
+        # Get users that current user follows
+        following_user_ids = set()
+        for follow in FollowModel.follower_index.query(hash_key=current_user_id):
+            following_user_ids.add(follow.following_id)
+
+        # Add current user's posts
+        following_user_ids.add(current_user_id)
+
+        if not following_user_ids:
+            # If not following anyone, return public posts
+            return await list_posts(offset, limit, current_user_id)
+
+        # Get posts from followed users
+        all_posts = []
+        for user_id in following_user_ids:
+            try:
+                for post in PostModel.user_posts_index.query(
+                    hash_key=user_id,
+                    scan_index_forward=False,
+                    limit=50,  # Limit per user to prevent one user dominating feed
+                ):
+                    if post.is_public or post.user_id == current_user_id:
+                        all_posts.append(post)
+            except Exception as e:
+                logger.warning(f"Error fetching posts for user {user_id}: {e}")
+                continue
+
+        # Sort by creation date
+        all_posts.sort(key=lambda x: x.created_at, reverse=True)
+
+        # Apply pagination
+        paginated_posts = all_posts[offset : offset + limit]
+
+        # Convert to response format
+        result = []
+        for post in paginated_posts:
+            try:
+                user = UserModel.get(post.user_id)
+                context = get_current_user_context(
+                    current_user_id, post_id=post.post_id
+                )
+
+                user_dict = User(
+                    user_id=user.user_id,
+                    username=user.username,
+                    email=user.email,
+                    full_name=f"{user.first_name or ''} {user.last_name or ''}",
+                    bio=user.bio,
+                    avatar_url=user.avatar_url,
+                    followers_count=user.followers_count,
+                    following_count=user.following_count,
+                    posts_count=user.posts_count,
+                    created_at=user.created_at,
+                ).dict()
+
+                post_dict = Post(
+                    id=post.post_id,
+                    user_id=post.user_id,
+                    user=user_dict,
+                    title=post.title,
+                    description=post.description,
+                    pdf_url=post.pdf_url,
+                    thumbnail_url=post.thumbnail_url,
+                    file_size=post.file_size,
+                    page_count=post.page_count,
+                    likes_count=post.likes_count,
+                    comments_count=post.comments_count,
+                    shares_count=post.shares_count,
+                    is_liked=context.get("is_liked", False),
+                    is_bookmarked=context.get("is_bookmarked", False),
+                    created_at=post.created_at,
+                ).dict()
+
+                result.append(post_dict)
+
+            except UserModel.DoesNotExist:
+                continue
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error getting feed for user {current_user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/search", response_model=List[Post])
 async def search_posts(
     q: str = Query(..., min_length=1),
@@ -561,95 +654,3 @@ async def create_comment(
         logger.error(f"Error creating comment on post {post_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
-@router.get("/feed", response_model=List[Post])
-async def get_user_feed(
-    offset: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=50),
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Get personalized feed based on following"""
-    try:
-        # Get users that current user follows
-        following_user_ids = set()
-        for follow in FollowModel.follower_index.query(hash_key=current_user_id):
-            following_user_ids.add(follow.following_id)
-
-        # Add current user's posts
-        following_user_ids.add(current_user_id)
-
-        if not following_user_ids:
-            # If not following anyone, return public posts
-            return await list_posts(offset, limit, current_user_id)
-
-        # Get posts from followed users
-        all_posts = []
-        for user_id in following_user_ids:
-            try:
-                for post in PostModel.user_posts_index.query(
-                    hash_key=user_id,
-                    scan_index_forward=False,
-                    limit=50,  # Limit per user to prevent one user dominating feed
-                ):
-                    if post.is_public or post.user_id == current_user_id:
-                        all_posts.append(post)
-            except Exception as e:
-                logger.warning(f"Error fetching posts for user {user_id}: {e}")
-                continue
-
-        # Sort by creation date
-        all_posts.sort(key=lambda x: x.created_at, reverse=True)
-
-        # Apply pagination
-        paginated_posts = all_posts[offset : offset + limit]
-
-        # Convert to response format
-        result = []
-        for post in paginated_posts:
-            try:
-                user = UserModel.get(post.user_id)
-                context = get_current_user_context(
-                    current_user_id, post_id=post.post_id
-                )
-
-                user_dict = User(
-                    user_id=user.user_id,
-                    username=user.username,
-                    email=user.email,
-                    full_name=f"{user.first_name or ''} {user.last_name or ''}",
-                    bio=user.bio,
-                    avatar_url=user.avatar_url,
-                    followers_count=user.followers_count,
-                    following_count=user.following_count,
-                    posts_count=user.posts_count,
-                    created_at=user.created_at,
-                ).dict()
-
-                post_dict = Post(
-                    id=post.post_id,
-                    user_id=post.user_id,
-                    user=user_dict,
-                    title=post.title,
-                    description=post.description,
-                    pdf_url=post.pdf_url,
-                    thumbnail_url=post.thumbnail_url,
-                    file_size=post.file_size,
-                    page_count=post.page_count,
-                    likes_count=post.likes_count,
-                    comments_count=post.comments_count,
-                    shares_count=post.shares_count,
-                    is_liked=context.get("is_liked", False),
-                    is_bookmarked=context.get("is_bookmarked", False),
-                    created_at=post.created_at,
-                ).dict()
-
-                result.append(post_dict)
-
-            except UserModel.DoesNotExist:
-                continue
-
-        return result
-
-    except Exception as e:
-        logger.error(f"Error getting feed for user {current_user_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")

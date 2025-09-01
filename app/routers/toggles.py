@@ -16,7 +16,7 @@ from ..models import LikeModel, BookmarkModel, FollowModel
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-router = APIRouter(prefix="/posts", tags=["Toggles"])
+post_router = APIRouter(prefix="/posts", tags=["Toggles"])
 
 user_router = APIRouter(prefix="/users", tags=["Toggles"])
 
@@ -78,7 +78,7 @@ async def toggle_follow(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/{post_id}/like")
+@post_router.post("/{post_id}/like")
 async def toggle_like(
     post_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
 ):
@@ -115,7 +115,7 @@ async def toggle_like(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/{post_id}/bookmark")
+@post_router.post("/{post_id}/bookmark")
 async def toggle_bookmark(
     post_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
 ):
@@ -148,7 +148,7 @@ async def toggle_bookmark(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.patch("/{post_id}/visibility")
+@post_router.patch("/{post_id}/visibility")
 async def toggle_post_visibility(
     post_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
 ):

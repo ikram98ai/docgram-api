@@ -24,6 +24,9 @@ app.add_middleware(
 app.include_router(routers.user.router)
 app.include_router(routers.auth.router)
 app.include_router(routers.post.router)
+app.include_router(routers.chat.router)
+app.include_router(routers.toggles.post_router)
+app.include_router(routers.toggles.user_router)
 
 
 @app.get("/")
