@@ -13,12 +13,14 @@ logger = logging.getLogger(__name__)
 
 # Config
 EMBED_MODEL = "text-embedding-004"
-EMBED_DIM =  768
+EMBED_DIM = 768
 PINECONE_INDEX = "docgram-index"
 PINECONE_REGION = "us-east-1"
 
 
-def _smart_chunk_text(text: str, chunk_size: int, overlap: int) -> List[Tuple[str, int, int]]:
+def _smart_chunk_text(
+    text: str, chunk_size: int, overlap: int
+) -> List[Tuple[str, int, int]]:
     """
     Chunk text at word boundaries. Returns list of (chunk_text, start_offset, end_offset)
     """
@@ -51,7 +53,7 @@ def _smart_chunk_text(text: str, chunk_size: int, overlap: int) -> List[Tuple[st
         end_pos = start_pos
         while j < n:
             token, s, e = token_positions[j]
-            approx_len = (e - start_pos)
+            approx_len = e - start_pos
             if approx_len > chunk_size and chunk_tokens:
                 break
             chunk_tokens.append(token)
@@ -72,13 +74,15 @@ def _smart_chunk_text(text: str, chunk_size: int, overlap: int) -> List[Tuple[st
 
 
 class RAGIndexer:
-    def __init__(self,
-                 pinecone_client: Pinecone,
-                 openai_client: OpenAI,
-                 index_name: str = PINECONE_INDEX,
-                 embed_model: str = EMBED_MODEL,
-                 embed_dim: int = EMBED_DIM,
-                 pinecone_region: str = PINECONE_REGION):
+    def __init__(
+        self,
+        pinecone_client: Pinecone,
+        openai_client: OpenAI,
+        index_name: str = PINECONE_INDEX,
+        embed_model: str = EMBED_MODEL,
+        embed_dim: int = EMBED_DIM,
+        pinecone_region: str = PINECONE_REGION,
+    ):
         self.pc = pinecone_client
         self.client = openai_client
         self.index_name = index_name
@@ -95,7 +99,7 @@ class RAGIndexer:
                 vector_type="dense",
                 metric="dotproduct",
                 dimension=self.embed_dim,
-                spec=spec
+                spec=spec,
             )
             logger.info("Index created.")
 
@@ -108,13 +112,14 @@ class RAGIndexer:
         buffer = io.BytesIO(file_bytes)
         result = md.convert(buffer)
         # Use filename without extension as prefix
-        text_content = result.text_content if hasattr(result, "text_content") else str(result)
+        text_content = (
+            result.text_content if hasattr(result, "text_content") else str(result)
+        )
         return text_content
 
-    async def pdf_to_chunks(self,
-                            pdf_bytes: bytes,
-                            chunk_size: int = 1000,
-                            overlap: int = 200) -> List[Dict]:
+    async def pdf_to_chunks(
+        self, pdf_bytes: bytes, chunk_size: int = 1000, overlap: int = 200
+    ) -> List[Dict]:
         """
         Returns list of dicts:
             {"chunk_id": str, "text": str, "source": filename, "start": int, "end": int}
@@ -123,18 +128,20 @@ class RAGIndexer:
         chunks_meta = _smart_chunk_text(content, chunk_size=chunk_size, overlap=overlap)
         chunks = []
         for idx, (chunk_text, start, end) in enumerate(chunks_meta):
-            chunks.append({
-                "chunk_id": f"{uuid4().hex}",
-                "text": chunk_text,
-                "start": start,
-                "end": end,
-                "length": end - start
-            })
+            chunks.append(
+                {
+                    "chunk_id": f"{uuid4().hex}",
+                    "text": chunk_text,
+                    "start": start,
+                    "end": end,
+                    "length": end - start,
+                }
+            )
         return chunks
 
     def _batch_iter(self, items: List, batch_size: int):
         for i in range(0, len(items), batch_size):
-            yield items[i:i + batch_size], i, min(i + batch_size, len(items))
+            yield items[i : i + batch_size], i, min(i + batch_size, len(items))
 
     def _safe_create_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
@@ -152,10 +159,9 @@ class RAGIndexer:
                     raise
         return []
 
-    def upsert_chunks(self,
-                      chunks: List[Dict],
-                      post_id: Optional[str] = None,
-                      batch_size: int = 32) -> str:
+    def upsert_chunks(
+        self, chunks: List[Dict], post_id: Optional[str] = None, batch_size: int = 32
+    ) -> str:
         """
         Upsert chunks into pinecone. Returns summary dict with counts.
         """
@@ -181,37 +187,47 @@ class RAGIndexer:
                         "post_id": post_id,
                         "start": c.get("start"),
                         "end": c.get("end"),
-                        "length": c.get("length")
+                        "length": c.get("length"),
                     }
-                    vectors.append({"id": str(_id), "values": emb, "metadata": metadata})
+                    vectors.append(
+                        {"id": str(_id), "values": emb, "metadata": metadata}
+                    )
 
                 # Upsert
-                resp = index.upsert(vectors=vectors)
+                _ = index.upsert(vectors=vectors)
                 total_upserted += len(vectors)
-                logger.info(f"Upserted batch {start_idx}:{end_idx} -> {len(vectors)} vectors")
+                logger.info(
+                    f"Upserted batch {start_idx}:{end_idx} -> {len(vectors)} vectors"
+                )
             except Exception as e:
                 logger.exception(f"Failed to upsert batch {start_idx}:{end_idx}: {e}")
                 # continue with remaining batches
         return f"upserted {total_upserted} chunks"
 
-    async def upsert_pdf(self,
-                   pdf_bytes: bytes,
-                   post_id: Optional[str] = None,
-                   chunk_size: int = 1000,
-                   overlap: int = 200,
-                   batch_size: int = 32) -> str:
+    async def upsert_pdf(
+        self,
+        pdf_bytes: bytes,
+        post_id: Optional[str] = None,
+        chunk_size: int = 1000,
+        overlap: int = 200,
+        batch_size: int = 32,
+    ) -> str:
         """
         High-level helper: read PDF (async UploadFile) and upsert chunks.
         This function is now async; await pdf.read before calling.
         """
-        chunks = await self.pdf_to_chunks(pdf_bytes, chunk_size=chunk_size, overlap=overlap)
+        chunks = await self.pdf_to_chunks(
+            pdf_bytes, chunk_size=chunk_size, overlap=overlap
+        )
         return self.upsert_chunks(chunks, post_id=post_id, batch_size=batch_size)
 
-    def retrieval(self,
-                  query_text: str,
-                  post_id: Optional[str] = None,
-                  top_k: int = 5,
-                  include_metadata: bool = True) -> List[Dict]:
+    def retrieval(
+        self,
+        query_text: str,
+        post_id: Optional[str] = None,
+        top_k: int = 5,
+        include_metadata: bool = True,
+    ) -> List[Dict]:
         """
         Returns list of matches: {"id", "score", "metadata", "text"}
         """
@@ -219,7 +235,9 @@ class RAGIndexer:
             return []
 
         index = self.pc.Index(self.index_name)
-        emb_res = self.client.embeddings.create(input=query_text, model=self.embed_model)
+        emb_res = self.client.embeddings.create(
+            input=query_text, model=self.embed_model
+        )
         dense_embedding = emb_res.data[0].embedding
 
         query_filter = {"post_id": post_id} if post_id is not None else None
@@ -227,28 +245,43 @@ class RAGIndexer:
         query_kwargs = {
             "vector": dense_embedding,
             "top_k": top_k,
-            "include_metadata": include_metadata
+            "include_metadata": include_metadata,
         }
         if query_filter:
             query_kwargs["filter"] = query_filter
 
         res = index.query(**query_kwargs)
-        matches = res.get("matches", []) if isinstance(res, dict) else getattr(res, "matches", [])
+        matches = (
+            res.get("matches", [])
+            if isinstance(res, dict)
+            else getattr(res, "matches", [])
+        )
 
         results = []
         for m in matches:
-            metadata = m.get("metadata", {}) if isinstance(m, dict) else getattr(m, "metadata", {})
-            text = metadata.get("text") or metadata.get("content") or metadata.get("source")  # fallback
-            # In our upsert we stored only metadata fields; the original chunk text isn't stored in metadata by default.
-            # If you want chunk text in retrieval, include it in metadata at upsert time (metadata["text"] = chunk_text).
-            results.append({
-                "id": m.get("id"),
-                "score": m.get("score", m.get("payload", {}).get("score") if isinstance(m, dict) else None),
-                "metadata": metadata,
-            })
+            metadata = (
+                m.get("metadata", {})
+                if isinstance(m, dict)
+                else getattr(m, "metadata", {})
+            )
+
+            results.append(
+                {
+                    "id": m.get("id"),
+                    "score": m.get(
+                        "score",
+                        m.get("payload", {}).get("score")
+                        if isinstance(m, dict)
+                        else None,
+                    ),
+                    "metadata": metadata,
+                }
+            )
         return results
 
-    def build_prompt(self, query: str, contexts: List[Dict], max_context_chars: int = 4000) -> str:
+    def build_prompt(
+        self, query: str, contexts: List[Dict], max_context_chars: int = 4000
+    ) -> str:
         """
         Build a prompt (context + query) for an LLM. Truncates contexts to the most relevant until char budget is reached.
         """
@@ -273,9 +306,8 @@ Answer concisely and cite sources where useful."""
         return prompt
 
 
-
 def get_rag_instance() -> RAGIndexer:
-    gemini_base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-    client = OpenAI( base_url=gemini_base_url, api_key=settings.gemini_api_key )
+    gemini_base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    client = OpenAI(base_url=gemini_base_url, api_key=settings.gemini_api_key)
     pc = Pinecone(api_key=settings.pinecone_api_key)
     return RAGIndexer(pc, client)

@@ -17,22 +17,18 @@ from fastapi import (
 from ..dependencies import get_current_user_id
 from ..utils import upload_to_s3
 from .utils import (
-    get_post_by_id, 
-    get_user_by_id, 
-    get_pdf_page_count, 
-    generate_pdf_thumbnail, 
-    process_pdf_embeddings, 
-    ask_pdf_question
+    get_post_by_id,
+    get_user_by_id,
+    get_pdf_page_count,
+    generate_pdf_thumbnail,
+    process_pdf_embeddings,
 )
+
 # Import our models
 from ..models import (
     UserModel,
     PostModel,
-    LikeModel,
-    BookmarkModel,
     CommentModel,
-    ChatConversationModel,
-    ChatMessageModel,
     FollowModel,
     get_current_user_context,
 )
@@ -40,8 +36,6 @@ from ..schemas import (
     User,
     Post,
     BookUpdateRequest,
-    ChatMessage,
-    MessageRequest,
     Comment,
 )
 
@@ -54,6 +48,7 @@ router = APIRouter(prefix="/posts", tags=["Posts"])
 
 # AWS clients (initialized once for Lambda container reuse)
 STAGE = os.getenv("STAGE", "dev")
+
 
 @router.get("/", response_model=List[Post])
 async def list_posts(
@@ -115,7 +110,7 @@ async def list_posts(
                     is_liked=context.get("is_liked", False),
                     is_bookmarked=context.get("is_bookmarked", False),
                     created_at=post.created_at,
-                    is_public = post.is_public==1,
+                    is_public=post.is_public == 1,
                 ).dict()
 
                 result.append(post_dict)
@@ -129,7 +124,6 @@ async def list_posts(
     except Exception as e:
         logger.error(f"Error listing posts: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
 
 
 @router.get("/search", response_model=List[Post])
@@ -147,7 +141,9 @@ async def search_posts(
 
         posts = []
         for post in PostModel.scan(
-            filter_condition=PostModel.title.contains(q) | PostModel.title.contains(q.lower()) | PostModel.title.contains(q.title())
+            filter_condition=PostModel.title.contains(q)
+            | PostModel.title.contains(q.lower())
+            | PostModel.title.contains(q.title())
         ):
             posts.append(post)
 
@@ -200,34 +196,11 @@ async def search_posts(
 
             except UserModel.DoesNotExist:
                 continue
-            
+
         return result
 
     except Exception as e:
         logger.error(f"Error searching posts: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.delete("/messages/{message_id}")
-async def delete_message(
-    message_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
-):
-    """Delete a chat message"""
-    try:
-        message = ChatMessageModel.get(message_id)
-
-        # Check if user owns the conversation
-        conversation = ChatConversationModel.get(message.conversation_id)
-        if conversation.user_id != current_user_id:
-            raise HTTPException(status_code=403, detail="Not authorized")
-
-        message.delete()
-        return {"message": "Message deleted successfully"}
-
-    except ChatMessageModel.DoesNotExist:
-        raise HTTPException(status_code=404, detail="Message not found")
-    except Exception as e:
-        logger.error(f"Error deleting message {message_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -473,247 +446,6 @@ async def delete_post(
 
     except Exception as e:
         logger.error(f"Error deleting post {post_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/{post_id}/like")
-async def toggle_like(
-    post_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
-):
-    """Toggle like on a post"""
-    try:
-        post = await get_post_by_id(post_id)
-        like_id = LikeModel.create_like_id(post_id, current_user_id)
-
-        try:
-            # Check if already liked
-            existing_like = LikeModel.get(like_id)
-            # Unlike
-            existing_like.delete()
-            post.likes_count = max(0, post.likes_count - 1)
-            is_liked = False
-        except LikeModel.DoesNotExist:
-            # Like
-            like = LikeModel(
-                like_id=like_id,
-                post_id=post_id,
-                user_id=current_user_id,
-                created_at=datetime.now(timezone.utc),
-            )
-            like.save()
-            post.likes_count += 1
-            is_liked = True
-
-        post.save()
-
-        return {"is_liked": is_liked, "likes_count": post.likes_count}
-
-    except Exception as e:
-        logger.error(f"Error toggling like for post {post_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/{post_id}/bookmark")
-async def toggle_bookmark(
-    post_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
-):
-    """Toggle bookmark on a post"""
-    try:
-        post = await get_post_by_id(post_id)
-        bookmark_id = BookmarkModel.create_bookmark_id(post_id, current_user_id)
-
-        try:
-            # Check if already bookmarked
-            existing_bookmark = BookmarkModel.get(bookmark_id)
-            # Unbookmark
-            existing_bookmark.delete()
-            is_bookmarked = False
-        except BookmarkModel.DoesNotExist:
-            # Bookmark
-            bookmark = BookmarkModel(
-                bookmark_id=bookmark_id,
-                post_id=post_id,
-                user_id=current_user_id,
-                created_at=datetime.now(timezone.utc),
-            )
-            bookmark.save()
-            is_bookmarked = True
-
-        return {"is_bookmarked": is_bookmarked}
-
-    except Exception as e:
-        logger.error(f"Error toggling bookmark for post {post_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/{post_id}/messages", response_model=List[ChatMessage])
-async def get_post_messages(
-    post_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
-):
-    """Get chat messages for a post"""
-    try:
-        # Find or create conversation for this user and post
-        conversation_id = f"{post_id}#{current_user_id}"
-
-        try:
-            conversation = ChatConversationModel.get(conversation_id)
-        except ChatConversationModel.DoesNotExist:
-            # Create new conversation
-            conversation = ChatConversationModel(
-                conversation_id=conversation_id,
-                post_id=post_id,
-                user_id=current_user_id,
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
-            )
-            conversation.save()
-
-        # Get messages
-        messages = []
-        for message in ChatMessageModel.conversation_messages_index.query(
-            hash_key=conversation_id,
-            scan_index_forward=True,  # Ascending order by timestamp
-        ):
-            messages.append(
-                ChatMessage(
-                    message_id=message.message_id,
-                    conversation_id=message.conversation_id,
-                    role=message.role,
-                    content=message.content,
-                    timestamp=message.timestamp,
-                )
-            )
-
-        return messages
-
-    except Exception as e:
-        logger.error(f"Error getting messages for post {post_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/{post_id}/messages", response_model=ChatMessage)
-async def post_message(
-    post_id: str = Path(...),
-    message_request: MessageRequest = None,
-    background_tasks: BackgroundTasks = None,
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Post a message to chat with PDF"""
-    try:
-        # Find or create conversation
-        conversation_id = f"{post_id}#{current_user_id}"
-        post = await get_post_by_id(post_id)
-        try:
-            conversation = ChatConversationModel.get(conversation_id)
-        except ChatConversationModel.DoesNotExist:
-            conversation = ChatConversationModel(
-                conversation_id=conversation_id,
-                post_id=post_id,
-                user_id=current_user_id,
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
-            )
-            conversation.save()
-
-        # Create user message
-        user_message = ChatMessageModel(
-            message_id=str(uuid.uuid4()),
-            conversation_id=conversation_id,
-            role="user",
-            content=message_request.query,
-            timestamp=datetime.now(timezone.utc),
-        )
-        user_message.save()
-
-        # Create assistant message placeholder
-        assistant_message = ChatMessageModel(
-            message_id=str(uuid.uuid4()),
-            conversation_id=conversation_id,
-            role="assistant",
-            content="Thinking...",
-            timestamp=datetime.now(timezone.utc),
-        )
-        assistant_message.save()
-
-        query = message_request.query + " in the PDF document titled: " + post.title + "\n Description: " + (post.description or "")
-
-        messages = [
-            {"role": "user", "content": query}
-        ]
-
-        # Schedule response generation
-        background_tasks.add_task(
-            generate_assistant_response,
-            assistant_message.message_id,
-            messages,
-            post_id,
-        )
-
-        # Update conversation timestamp
-        conversation.updated_at = datetime.now(timezone.utc)
-        conversation.save()
-
-        return ChatMessage(
-            message_id=user_message.message_id,
-            conversation_id=user_message.conversation_id,
-            role=user_message.role,
-            content=user_message.content,
-            timestamp=user_message.timestamp,
-        )
-
-    except Exception as e:
-        logger.error(f"Error posting message to {post_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-async def generate_assistant_response(message_id: str, messages: list[dict[str,str]], post_id: str):
-    """Background task to generate AI response"""
-    try:
-        # Get post info
-        # Generate response using your PDF QA system
-        response = await ask_pdf_question(messages, post_id)
-
-        # Update assistant message
-        message = ChatMessageModel.get(message_id)
-        message.content = response
-        message.timestamp = datetime.now(timezone.utc)
-        message.save()
-
-    except Exception as e:
-        logger.error(f"Error generating response for message {message_id}: {e}")
-        # Update with error message
-        try:
-            message = ChatMessageModel.get(message_id)
-            message.content = (
-                "Sorry, I'm having trouble processing your question right now."
-            )
-            message.save()
-        except Exception as e:
-            logger.error(
-                f"Error generating response after 1st exeption for message {message_id}: {e}"
-            )
-
-
-@router.patch("/{post_id}/visibility")
-async def toggle_post_visibility(
-    post_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
-):
-    """Toggle post public/private visibility"""
-    try:
-        post = await get_post_by_id(post_id)
-
-        # Check ownership
-        if post.user_id != current_user_id:
-            raise HTTPException(status_code=403, detail="Not authorized")
-
-        post.is_public = int(not (post.is_public==1))
-        post.updated_at = datetime.now(timezone.utc)
-        post.save()
-
-        return {"is_public": post.is_public==1}
-
-    except Exception as e:
-        logger.error(f"Error toggling visibility for post {post_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

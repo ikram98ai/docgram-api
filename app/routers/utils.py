@@ -3,24 +3,20 @@ from typing import Optional
 from fastapi import (
     HTTPException,
 )
-import fitz, os
+import fitz
+import os
 from ..utils import upload_to_s3
 
 # Import our models
-from ..models import (
-    UserModel,
-    PostModel
-)
-import os
+from ..models import UserModel, PostModel
 from ..ai.rag import get_rag_instance
 from ..ai.ai_agents import agent_runner
+
 # Configure logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 STAGE = os.getenv("STAGE", "dev")
-
-
 
 
 def get_pdf_page_count(pdf_content: bytes) -> int:
@@ -82,14 +78,15 @@ async def process_pdf_embeddings(pdf_content: bytes, post_id: str):
         logger.error(f"PDF processing error for {post_id}: {e}")
 
 
-async def ask_pdf_question(messages: list[dict[str,str]], post_id: str) -> str:
+async def ask_pdf_question(messages: list[dict[str, str]], post_id: str) -> str:
     """Ask question to PDF using vector search"""
     try:
-        logger.info(f"Asking question {messages[-1]["content"]} to PDF for post {post_id}")
+        logger.info(
+            f"Asking question {messages[-1]['content']} to PDF for post {post_id}"
+        )
         response = await agent_runner(messages, post_id=post_id)
         return response
 
     except Exception as e:
         logger.error(f"PDF QA error: {e}")
         return "Sorry, I'm having trouble processing your question right now."
-

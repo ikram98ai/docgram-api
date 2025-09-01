@@ -8,7 +8,7 @@ from app.models import (
     ChatConversationModel,
     ChatMessageModel,
     Notification,
-    BookmarkModel
+    BookmarkModel,
 )
 from app.utils import hash_password, is_strong_password
 
@@ -29,7 +29,7 @@ def create_tables():
         ChatConversationModel,
         ChatMessageModel,
         Notification,
-        BookmarkModel
+        BookmarkModel,
     ]
     for table in tables:
         if not table.exists():
@@ -82,7 +82,7 @@ def list_admins():
     if confirmation.lower() != "yes":
         print("Operation cancelled.")
         raise typer.Exit()
-    admins = UserModel.scan(UserModel.is_superuser == True)
+    admins = UserModel.scan(UserModel.is_superuser)
     for admin in admins:
         print(f"ID: {admin.id}, Username: {admin.username}, Email: {admin.email}")
 
@@ -98,7 +98,7 @@ def update_admin(
     """
     try:
         admin = UserModel.get(user_id)
-        if admin.is_superuser == False:
+        if not admin.is_superuser:
             print(f"User with ID {user_id} is not an admin.")
             raise typer.Exit()
 
@@ -120,7 +120,7 @@ def delete_admin(user_id: str = typer.Option(..., "--id")):
     """
     try:
         admin = UserModel.get(user_id)
-        if admin.is_superuser == False:
+        if not admin.is_superuser:
             print(f"User with ID {user_id} is not an admin.")
             raise typer.Exit()
 

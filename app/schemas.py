@@ -49,7 +49,7 @@ class User(BaseModel):
 
 
 class Post(BaseModel):
-    id: str 
+    id: str
     user_id: str
     user: Optional[User] = None  # Nested user object
     title: str
@@ -62,7 +62,7 @@ class Post(BaseModel):
     comments_count: int = 0
     shares_count: int = 0
     is_liked: Optional[bool] = None  # Context-dependent
-    is_bookmarked: Optional[bool] = None # Context-dependent
+    is_bookmarked: Optional[bool] = None  # Context-dependent
     created_at: datetime
     is_public: Optional[bool] = True
 

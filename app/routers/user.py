@@ -1,7 +1,6 @@
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import HTTPException, Depends, UploadFile, File, Query, Path, Form
 from ..dependencies import get_current_user_id
@@ -12,6 +11,7 @@ from ..models import UserModel, FollowModel, get_current_user_context, BookmarkM
 from ..schemas import User, UserUpdateRequest, Post
 from ..models import PostModel
 from ..utils import upload_to_s3
+from .utils import get_user_by_id
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -21,17 +21,6 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 # AWS clients (initialized once for Lambda container reuse)
 STAGE = os.getenv("STAGE", "dev")
-
-
-async def get_user_by_id(user_id: str) -> UserModel:
-    """Get user by ID with error handling"""
-    try:
-        return UserModel.get(user_id)
-    except UserModel.DoesNotExist:
-        raise HTTPException(status_code=404, detail="User not found")
-
-
-# Authentication Routes
 
 
 @router.get("/me", response_model=User)
@@ -52,9 +41,6 @@ async def get_current_user_info(
         posts_count=current_user.posts_count,
         created_at=current_user.created_at,
     )
-
-
-# User Profile Routes
 
 
 @router.put("/profile", response_model=User)
@@ -146,63 +132,6 @@ async def update_user_profile(
     except Exception as e:
         logger.error(f"Profile update error: {e}")
         raise HTTPException(status_code=500, detail="Profile update failed")
-
-
-@router.post("/{user_id}/follow")
-async def follow_user(
-    user_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
-):
-    """Follow or unfollow a user (follow function equivalent)"""
-    try:
-        if user_id == current_user_id:
-            raise HTTPException(status_code=400, detail="Cannot follow yourself")
-
-        # Check if target user exists
-        target_user = await get_user_by_id(user_id)
-        current_user = await get_user_by_id(current_user_id)
-
-        relationship_id = FollowModel.create_relationship_id(current_user_id, user_id)
-
-        try:
-            # Check if already following
-            existing_follow = FollowModel.get(relationship_id)
-            # Unfollow
-            existing_follow.delete()
-            # Update counts
-            current_user.following_count = max(0, current_user.following_count - 1)
-            target_user.followers_count = max(0, target_user.followers_count - 1)
-
-            is_following = False
-
-        except FollowModel.DoesNotExist:
-            # Follow
-            follow = FollowModel(
-                relationship_id=relationship_id,
-                follower_id=current_user_id,
-                following_id=user_id,
-                created_at=datetime.now(timezone.utc),
-            )
-            follow.save()
-
-            # Update counts
-            current_user.following_count += 1
-            target_user.followers_count += 1
-
-            is_following = True
-
-        # Save updated counts
-        current_user.save()
-        target_user.save()
-
-        return {
-            "following": is_following,  # Match your Django template variable name
-            "followers_count": target_user.followers_count,
-            "following_count": current_user.following_count,
-        }
-
-    except Exception as e:
-        logger.error(f"Error following user {user_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{user_id}/profile", response_model=User)
@@ -346,10 +275,10 @@ async def get_user_following(
 
 @router.get("/{user_id}/posts", response_model=List[Post])
 async def get_user_posts(
-    user_id: str = Path(...),     
+    user_id: str = Path(...),
     offset: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=50),
-    current_user_id: str = Depends(get_current_user_id)
+    current_user_id: str = Depends(get_current_user_id),
 ):
     """Get user profile with posts and stats"""
     try:
@@ -384,14 +313,13 @@ async def get_user_posts(
                 is_liked=context.get("is_liked", False),
                 is_bookmarked=context.get("is_bookmarked", False),
                 created_at=post.created_at,
-                is_public = post.is_public==1,
-
+                is_public=post.is_public == 1,
             ).model_dump()
 
             posts.append(post_dict)
 
         return posts
-    
+
     except Exception as e:
         logger.error(f"Error getting profile for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -473,9 +401,7 @@ async def get_user_bookmarks(
                 )
                 continue
             except UserModel.DoesNotExist:
-                logger.warning(
-                    f"User for post {bookmark.post_id} not found, skipping."
-                )
+                logger.warning(f"User for post {bookmark.post_id} not found, skipping.")
                 continue
 
         return posts
