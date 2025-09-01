@@ -25,6 +25,7 @@ def get_model():
 
     return model
 
+
 async def agent_runner(messages: List[dict], post_id: str):
     instructions = f"""Answer the user's question based on the result of retrieval by passing improve query. 
     Before using the retrieval tool, make sure to think step by step and decide what to search for. 

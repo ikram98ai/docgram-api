@@ -65,14 +65,14 @@ async def get_post_by_id(post_id: str) -> PostModel:
 
 
 # Background task functions
-async def process_pdf_embeddings(pdf_content: bytes, post_id: str):
+async def process_pdf_embeddings(pdf_content: bytes, post_id: str, title: str):
     """Background task to process PDF for embeddings"""
     try:
         # This extract text and create embeddings for vector search
         logger.info(f"Processing PDF embeddings for post {post_id}")
         rag = get_rag_instance()
         rag.create_index_if_not_exists()
-        result = await rag.upsert_pdf(pdf_content, post_id=post_id)
+        result = await rag.upsert_pdf(pdf_content, title, post_id=post_id)
         return result
     except Exception as e:
         logger.error(f"PDF processing error for {post_id}: {e}")

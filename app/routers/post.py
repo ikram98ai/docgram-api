@@ -408,7 +408,7 @@ async def create_post(
         user.save()
 
         # Schedule background PDF processing
-        background_tasks.add_task(process_pdf_embeddings, pdf_content, post_id)
+        background_tasks.add_task(process_pdf_embeddings, pdf_content, post_id, title)
 
         # Return created post
         user_dict = User(
@@ -653,4 +653,3 @@ async def create_comment(
     except Exception as e:
         logger.error(f"Error creating comment on post {post_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-

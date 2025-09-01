@@ -97,6 +97,7 @@ async def get_post_messages(
         logger.error(f"Error getting messages for post {post_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.post("/{post_id}/messages")
 async def post_message(
     post_id: str = Path(...),
@@ -129,24 +130,23 @@ async def post_message(
             timestamp=datetime.now(timezone.utc),
         )
         user_message.save()
+        query = message_request.query + " in " + post.title
+        
+        chat_messages = list(ChatMessageModel.conversation_messages_index.query(
+            hash_key=conversation_id, scan_index_forward=True, limit=10
+        ))
 
-        query = (
-            message_request.query
-            + " in the PDF document titled: "
-            + post.title
-            + "\n Description: "
-            + (post.description or "")
-        )
-
-        messages = [{"role": "user", "content": query}]
-
+        messages = []
+        if chat_messages:
+            messages = [{"role": msg.role, "content": msg.content} for msg in chat_messages]
+        messages.append({"role": "user", "content": query})
+        print("Messages to send to agent:", messages)
         async def response_generator():
             complete_response = ""
             async for chunk in agent_runner(messages, post_id=post_id):
-                print("Chunk:", chunk)
                 complete_response += chunk
                 yield chunk
-            
+
             # After streaming completes, save the assistant message
             conversation.updated_at = datetime.now(timezone.utc)
             conversation.save()

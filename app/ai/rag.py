@@ -160,7 +160,11 @@ class RAGIndexer:
         return []
 
     def upsert_chunks(
-        self, chunks: List[Dict], post_id: Optional[str] = None, batch_size: int = 32
+        self,
+        chunks: List[Dict],
+        title: str,
+        post_id: Optional[str] = None,
+        batch_size: int = 32,
     ) -> str:
         """
         Upsert chunks into pinecone. Returns summary dict with counts.
@@ -185,6 +189,7 @@ class RAGIndexer:
                     metadata = {
                         "text": c.get("text"),
                         "post_id": post_id,
+                        "source": title,
                         "start": c.get("start"),
                         "end": c.get("end"),
                         "length": c.get("length"),
@@ -207,6 +212,7 @@ class RAGIndexer:
     async def upsert_pdf(
         self,
         pdf_bytes: bytes,
+        title: str,
         post_id: Optional[str] = None,
         chunk_size: int = 1000,
         overlap: int = 200,
@@ -219,7 +225,7 @@ class RAGIndexer:
         chunks = await self.pdf_to_chunks(
             pdf_bytes, chunk_size=chunk_size, overlap=overlap
         )
-        return self.upsert_chunks(chunks, post_id=post_id, batch_size=batch_size)
+        return self.upsert_chunks(chunks, title, post_id=post_id, batch_size=batch_size)
 
     def retrieval(
         self,
