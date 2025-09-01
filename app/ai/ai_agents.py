@@ -25,21 +25,19 @@ def get_model():
 
     return model
 
-
-@function_tool
-async def retrieval_tool(query: str, post_id: str) -> str:
-    """Tool for retrieving relevant documents from the vector store."""
-    print("Retrieval tool called with query:", query, "and post_id:", post_id)
-    rag = get_rag_instance()
-    results = rag.retrieval(query, post_id=post_id, top_k=3)
-    prompt = rag.build_prompt(query, results)
-    return prompt
-
-
 async def agent_runner(messages: List[dict], post_id: str):
-    instructions = f"""Answer the user's question based on the result of retrieval by passing improve query and exact post_id:{post_id}. 
+    instructions = f"""Answer the user's question based on the result of retrieval by passing improve query. 
     Before using the retrieval tool, make sure to think step by step and decide what to search for. 
     If the retrieval result does not contain relevant information, respond with your best knowledge."""
+
+    @function_tool
+    async def retrieval_tool(query: str) -> str:
+        """Tool for retrieving relevant documents from the vector store."""
+        print("Retrieval tool called with query:", query, "and post_id:", post_id)
+        rag = get_rag_instance()
+        results = rag.retrieval(query, post_id=post_id, top_k=3)
+        prompt = rag.build_prompt(query, results)
+        return prompt
 
     trademark_agent = Agent(
         name="Trademark detector",
@@ -49,7 +47,7 @@ async def agent_runner(messages: List[dict], post_id: str):
         model_settings=ModelSettings(temperature=0.1),
     )
 
-    result = await Runner.run_streamed(trademark_agent, input=messages)
+    result = Runner.run_streamed(trademark_agent, input=messages)
     async for event in result.stream_events():
         if event.type == "raw_response_event" and isinstance(
             event.data, ResponseTextDeltaEvent

@@ -53,7 +53,7 @@ async def delete_message(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/posts/{post_id}/messages", response_model=List[ChatMessage])
+@router.get("/{post_id}/messages", response_model=List[ChatMessage])
 async def get_post_messages(
     post_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
 ):
@@ -97,8 +97,7 @@ async def get_post_messages(
         logger.error(f"Error getting messages for post {post_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
-@router.post("/posts/{post_id}/messages")
+@router.post("/{post_id}/messages")
 async def post_message(
     post_id: str = Path(...),
     message_request: MessageRequest = None,
@@ -141,23 +140,27 @@ async def post_message(
 
         messages = [{"role": "user", "content": query}]
 
-        complete_response = ""
-        async for chunk in agent_runner(messages, post_id=post_id):
-            complete_response += chunk
-            return StreamingResponse(chunk, media_type="text/plain")
+        async def response_generator():
+            complete_response = ""
+            async for chunk in agent_runner(messages, post_id=post_id):
+                print("Chunk:", chunk)
+                complete_response += chunk
+                yield chunk
+            
+            # After streaming completes, save the assistant message
+            conversation.updated_at = datetime.now(timezone.utc)
+            conversation.save()
 
-        # Update conversation timestamp
-        conversation.updated_at = datetime.now(timezone.utc)
-        conversation.save()
+            assistant_message = ChatMessageModel(
+                message_id=str(uuid.uuid4()),
+                conversation_id=conversation_id,
+                role="assistant",
+                content=complete_response,
+                timestamp=datetime.now(timezone.utc),
+            )
+            assistant_message.save()
 
-        assistant_message = ChatMessageModel(
-            message_id=str(uuid.uuid4()),
-            conversation_id=conversation_id,
-            role="assistant",
-            content=complete_response,
-            timestamp=datetime.now(timezone.utc),
-        )
-        assistant_message.save()
+        return StreamingResponse(response_generator(), media_type="text/plain")
 
     except Exception as e:
         logger.error(f"Error posting message to {post_id}: {e}")
