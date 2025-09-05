@@ -224,7 +224,6 @@ class RAGIndexer:
     ) -> str:
         """
         High-level helper: read PDF (async UploadFile) and upsert chunks.
-        This function is now async; await pdf.read before calling.
         """
         chunks = self.pdf_to_chunks(pdf_bytes, chunk_size=chunk_size, overlap=overlap)
         return self.upsert_chunks(chunks, title, post_id=post_id, batch_size=batch_size)

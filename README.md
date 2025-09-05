@@ -2,552 +2,514 @@
 
 This documentation provides a detailed guide to using the Docgram API. It covers all the available endpoints, request and response formats, and best practices for handling edge cases.
 
-## Authentication
+
+## Authentication API Documentation (`app/routers/auth.py`)
 
 Authentication is handled via JWT (JSON Web Tokens). To access protected endpoints, you need to include an `Authorization` header with the value `Bearer <your_access_token>`.
 
-### `POST /login`
-
-Authenticates a user and returns an access token.
-
-**Request Body:**
-
-The request should be a `multipart/form-data` with the following fields:
-
-*   `username` (string, required): The user's username or email.
-*   `password` (string, required): The user's password.
-
-**Responses:**
-
-*   **200 OK:** Successful login.
-
+### 1. Login User
+- **Endpoint:** `POST /login`
+- **Description:** Authenticates a user and returns a JWT token.
+- **Request Body:**
+  ```json
+  {
+    "username": "your_username_or_email",
+    "password": "your_password"
+  }
+  ```
+- **Responses:**
+  - **200 OK:** Successful login.
     ```json
     {
       "access_token": "your_jwt_token",
       "token_type": "bearer",
       "user": {
         "user_id": "user_uuid",
-        "username": "testuser",
+        "username": "string",
         "email": "user@example.com",
-        "full_name": "Test User",
-        "bio": "This is a bio.",
-        "avatar_url": "https://example.com/avatar.jpg",
-        "followers_count": 10,
-        "following_count": 5,
-        "posts_count": 3,
-        "created_at": "2025-08-28T12:00:00Z"
+        "full_name": "string",
+        "bio": "string",
+        "avatar_url": "string",
+        "followers_count": 0,
+        "following_count": 0,
+        "posts_count": 0,
+        "created_at": "2025-09-06T12:00:00Z"
       }
     }
     ```
+  - **401 Unauthorized:** Incorrect username or password.
+  - **400 Bad Request:** Inactive user.
+  - **500 Internal Server Error:** Login failed due to a server error.
 
-*   **401 Unauthorized:** Incorrect username or password.
+### 2. Register User
+- **Endpoint:** `POST /register/`
+- **Description:** Registers a new user.
+- **Request Body:**
+  ```json
+  {
+    "username": "new_username",
+    "email": "new_user@example.com",
+    "password": "new_password",
+    "first_name": "string",
+    "last_name": "string",
+    "bio": "string"
+  }
+  ```
+- **Responses:**
+  - **200 OK:** Successful registration. Returns the same response as login.
+  - **400 Bad Request:** Username or email already registered.
+  - **500 Internal Server Error:** Registration failed due to a server error.
 
+## Chat API Documentation (`app/routers/chat.py`)
+
+### 1. Delete a chat message
+- **Endpoint:** `DELETE /posts/messages/{message_id}`
+- **Description:** Deletes a specific chat message.
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:**
     ```json
     {
-      "detail": "Incorrect username or password"
+      "message": "Message deleted successfully"
     }
     ```
+  - **403 Forbidden:** The current user is not authorized to delete the message.
+  - **404 Not Found:** The message with the given `message_id` was not found.
+  - **500 Internal Server Error:** An error occurred while deleting the message.
 
-*   **400 Bad Request:** The user account is inactive.
+### 2. Get chat messages for a post
+- **Endpoint:** `GET /posts/{post_id}/messages`
+- **Description:** Retrieves all chat messages associated with a specific post for the current user.
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:**
+    ```json
+    [
+      {
+        "message_id": "string",
+        "conversation_id": "string",
+        "role": "user",
+        "content": "string",
+        "timestamp": "2025-09-06T12:00:00Z"
+      }
+    ]
+    ```
+  - **500 Internal Server Error:** An error occurred while fetching the messages.
 
+### 3. Post a message to a chat
+- **Endpoint:** `POST /posts/{post_id}/messages`
+- **Description:** Sends a new message to the chat associated with a post.
+- **Request Body:**
+  ```json
+  {
+    "query": "Your message here"
+  }
+  ```
+- **Responses:**
+  - **200 OK:** A streaming response of plain text.
+  - **500 Internal Server Error:** An error occurred while posting the message.
+
+## Posts API Documentation (`app/routers/post.py`)
+
+### 1. List public posts
+- **Endpoint:** `GET /posts/`
+- **Description:** Retrieves a paginated list of public posts.
+- **Query Parameters:**
+  - `offset`: `integer` (default: 0)
+  - `limit`: `integer` (default: 10, max: 50)
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:** A list of post objects.
+    ```json
+    [
+      {
+        "id": "string",
+        "user_id": "string",
+        "user": {
+          "user_id": "user_uuid",
+          "username": "string",
+          "email": "user@example.com",
+          "full_name": "string",
+          "bio": "string",
+          "avatar_url": "string",
+          "followers_count": 0,
+          "following_count": 0,
+          "posts_count": 0,
+          "created_at": "2025-09-06T12:00:00Z"
+        },
+        "title": "string",
+        "description": "string",
+        "pdf_url": "string",
+        "thumbnail_url": "string",
+        "file_size": 0,
+        "page_count": 0,
+        "likes_count": 0,
+        "comments_count": 0,
+        "shares_count": 0,
+        "is_liked": false,
+        "is_bookmarked": false,
+        "created_at": "2025-09-06T12:00:00Z",
+        "is_public": true
+      }
+    ]
+    ```
+  - **500 Internal Server Error:** An error occurred while fetching the posts.
+
+### 2. Get user feed
+- **Endpoint:** `GET /posts/feed`
+- **Description:** Retrieves a personalized feed of posts from users that the current user follows.
+- **Query Parameters:**
+  - `offset`: `integer` (default: 0)
+  - `limit`: `integer` (default: 10, max: 50)
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:** A list of post objects.
+    ```json
+    [
+      {
+        "id": "string",
+        "user_id": "string",
+        "user": {
+          "user_id": "user_uuid",
+          "username": "string",
+          "email": "user@example.com",
+          "full_name": "string",
+          "bio": "string",
+          "avatar_url": "string",
+          "followers_count": 0,
+          "following_count": 0,
+          "posts_count": 0,
+          "created_at": "2025-09-06T12:00:00Z"
+        },
+        "title": "string",
+        "description": "string",
+        "pdf_url": "string",
+        "thumbnail_url": "string",
+        "file_size": 0,
+        "page_count": 0,
+        "likes_count": 0,
+        "comments_count": 0,
+        "shares_count": 0,
+        "is_liked": false,
+        "is_bookmarked": false,
+        "created_at": "2025-09-06T12:00:00Z",
+        "is_public": true
+      }
+    ]
+    ```
+  - **500 Internal Server Error:** An error occurred while fetching the feed.
+
+### 3. Search posts
+- **Endpoint:** `GET /posts/search`
+- **Description:** Searches for posts based on a query string.
+- **Query Parameters:**
+  - `q`: `string` (required)
+  - `offset`: `integer` (default: 0)
+  - `limit`: `integer` (default: 20, max: 50)
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:** A list of post objects.
+    ```json
+    [
+      {
+        "id": "string",
+        "user_id": "string",
+        "user": {
+          "user_id": "user_uuid",
+          "username": "string",
+          "email": "user@example.com",
+          "full_name": "string",
+          "bio": "string",
+          "avatar_url": "string",
+          "followers_count": 0,
+          "following_count": 0,
+          "posts_count": 0,
+          "created_at": "2025-09-06T12:00:00Z"
+        },
+        "title": "string",
+        "description": "string",
+        "pdf_url": "string",
+        "thumbnail_url": "string",
+        "file_size": 0,
+        "page_count": 0,
+        "likes_count": 0,
+        "comments_count": 0,
+        "shares_count": 0,
+        "is_liked": false,
+        "is_bookmarked": false,
+        "created_at": "2025-09-06T12:00:00Z",
+        "is_public": true
+      }
+    ]
+    ```
+  - **500 Internal Server Error:** An error occurred during the search.
+
+### 4. Create a new post
+- **Endpoint:** `POST /posts/`
+- **Description:** Creates a new post by uploading a PDF file.
+- **Request Body:** `multipart/form-data`
+  - `pdf_file`: The PDF file to upload.
+  - `title`: `string` (optional)
+  - `description`: `string` (optional)
+  - `is_public`: `boolean` (default: `true`)
+- **Responses:**
+  - **200 OK:**
     ```json
     {
-      "detail": "Inactive user"
+      "message": "Post creation is in progress. You will be notified shortly."
     }
     ```
+  - **400 Bad Request:** Invalid file type or size.
+  - **500 Internal Server Error:** An error occurred while creating the post.
 
-*   **500 Internal Server Error:** An unexpected error occurred.
+### 5. Get post details
+- **Endpoint:** `GET /posts/{post_id}`
+- **Description:** Retrieves the details of a specific post.
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:** A post object.
+  - **500 Internal Server Error:** An error occurred while fetching the post.
 
-**Edge Cases & Best Practices:**
+### 6. Update a post
+- **Endpoint:** `PUT /posts/{post_id}`
+- **Description:** Updates the details of a specific post.
+- **Request Body:**
+  ```json
+  {
+    "title": "string",
+    "description": "string",
+    "is_public": true
+  }
+  ```
+- **Responses:**
+  - **200 OK:** The updated post object.
+  - **403 Forbidden:** The current user is not authorized to update the post.
+  - **500 Internal Server Error:** An error occurred while updating the post.
 
-*   Store the `access_token` securely on the client-side (e.g., in an HttpOnly cookie or secure storage).
-*   The token has an expiration time. Your application should handle token expiration and renewal.
-*   Implement rate limiting to prevent brute-force attacks.
-
-### `POST /register`
-
-Registers a new user.
-
-**Request Body:**
-
-*   `username` (string, required): A unique username (3-30 characters).
-*   `email` (string, required): A unique email address.
-*   `password` (string, required): A password (min 6 characters).
-*   `first_name` (string, optional): The user's first name (max 30 characters).
-*   `last_name` (string, optional): The user's last name (max 30 characters).
-*   `bio` (string, optional): A short bio (max 500 characters).
-
-**Responses:**
-
-*   **200 OK:** Successful registration. The response body is the same as the `/login` endpoint.
-
-*   **400 Bad Request:**
-    *   If the username is already registered: `{"detail": "Username already registered"}`
-    *   If the email is already registered: `{"detail": "Email already registered"}`
-
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-**Edge Cases & Best Practices:**
-
-*   Provide clear feedback to the user if their chosen username or email is already taken.
-*   After successful registration, you can automatically log the user in.
-
-## Users
-
-Endpoints for managing user profiles and relationships.
-
-### `GET /users/me`
-
-Retrieves the profile of the currently authenticated user.
-
-**Request:**
-
-*   Requires authentication.
-
-**Responses:**
-
-*   **200 OK:**
-
+### 7. Delete a post
+- **Endpoint:** `DELETE /posts/{post_id}`
+- **Description:** Deletes a specific post.
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:**
     ```json
     {
-      "user_id": "user_uuid",
-      "username": "testuser",
+      "message": "Post deleted successfully"
+    }
+    ```
+  - **403 Forbidden:** The current user is not authorized to delete the post.
+  - **500 Internal Server Error:** An error occurred while deleting the post.
+
+### 8. Get post comments
+- **Endpoint:** `GET /posts/{post_id}/comments`
+- **Description:** Retrieves the comments for a specific post.
+- **Query Parameters:**
+  - `offset`: `integer` (default: 0)
+  - `limit`: `integer` (default: 20, max: 100)
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:** A list of comment objects.
+    ```json
+    [
+      {
+        "comment_id": "string",
+        "post_id": "string",
+        "user_id": "string",
+        "user": {
+          "user_id": "user_uuid",
+          "username": "string",
+          "email": "user@example.com",
+          "full_name": "string",
+          "bio": "string",
+          "avatar_url": "string",
+          "followers_count": 0,
+          "following_count": 0,
+          "posts_count": 0,
+          "created_at": "2025-09-06T12:00:00Z"
+        },
+        "content": "string",
+        "created_at": "2025-09-06T12:00:00Z"
+      }
+    ]
+    ```
+  - **500 Internal Server Error:** An error occurred while fetching the comments.
+
+### 9. Create a comment
+- **Endpoint:** `POST /posts/{post_id}/comments`
+- **Description:** Adds a new comment to a specific post.
+- **Request Body:** `application/x-www-form-urlencoded`
+  - `content`: `string` (required, min_length: 1, max_length: 1000)
+- **Responses:**
+  - **200 OK:** The newly created comment object.
+  - **500 Internal Server Error:** An error occurred while creating the comment.
+
+## Toggles API Documentation (`app/routers/toggles.py`)
+
+### 1. Toggle follow
+- **Endpoint:** `POST /users/{user_id}/follow`
+- **Description:** Follows or unfollows a user.
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:**
+    ```json
+    {
+      "following": true,
+      "followers_count": 0,
+      "following_count": 0
+    }
+    ```
+  - **400 Bad Request:** The user cannot follow themselves.
+  - **500 Internal Server Error:** An error occurred.
+
+### 2. Toggle like
+- **Endpoint:** `POST /posts/{post_id}/like`
+- **Description:** Likes or unlikes a post.
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:**
+    ```json
+    {
+      "is_liked": true,
+      "likes_count": 0
+    }
+    ```
+  - **500 Internal Server Error:** An error occurred.
+
+### 3. Toggle bookmark
+- **Endpoint:** `POST /posts/{post_id}/bookmark`
+- **Description:** Bookmarks or unbookmarks a post.
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:**
+    ```json
+    {
+      "is_bookmarked": true
+    }
+    ```
+  - **500 Internal Server Error:** An error occurred.
+
+### 4. Toggle post visibility
+- **Endpoint:** `PATCH /posts/{post_id}/visibility`
+- **Description:** Toggles a post's visibility between public and private.
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:**
+    ```json
+    {
+      "is_public": true
+    }
+    ```
+  - **403 Forbidden:** The current user is not authorized to change the visibility.
+  - **500 Internal Server Error:** An error occurred.
+
+## Users API Documentation (`app/routers/user.py`)
+
+### 1. Get current user info
+- **Endpoint:** `GET /users/me`
+- **Description:** Retrieves the profile information of the currently authenticated user.
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:** A user object.
+    ```json
+    {
+      "user_id": "string",
+      "username": "string",
       "email": "user@example.com",
-      "full_name": "Test User",
-      "bio": "This is a bio.",
-      "avatar_url": "https://example.com/avatar.jpg",
-      "followers_count": 10,
-      "following_count": 5,
-      "posts_count": 3,
-      "created_at": "2025-08-28T12:00:00Z"
+      "full_name": "string",
+      "bio": "string",
+      "avatar_url": "string",
+      "followers_count": 0,
+      "following_count": 0,
+      "posts_count": 0,
+      "created_at": "2025-09-06T12:00:00Z"
     }
     ```
 
-*   **401 Unauthorized:** If the user is not authenticated.
-
-### `PUT /users/profile`
-
-Updates the profile of the currently authenticated user.
-
-**Request:**
-
-*   Requires authentication.
-*   The request can be a `multipart/form-data` if an avatar is being uploaded, or `application/json` for other fields.
-
-**Request Body:**
-
-*   `username` (string, optional): A new unique username (3-30 characters).
-*   `email` (string, optional): A new unique email.
-*   `first_name` (string, optional): New first name (max 30 characters).
-*   `last_name` (string, optional): New last name (max 30 characters).
-*   `bio` (string, optional): New bio (max 500 characters).
-*   `avatar_file` (file, optional): An image file for the avatar (JPG, JPEG, PNG, max 5MB).
-
-**Responses:**
-
-*   **200 OK:** Profile updated successfully. The response body contains the updated user profile.
-
-*   **400 Bad Request:**
-    *   If the username is already taken: `{"detail": "Username already taken"}`
-    *   If the email is already taken: `{"detail": "Email already taken"}`
-    *   Invalid file type or size for the avatar.
-
-*   **401 Unauthorized:** Not authenticated.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-**Edge Cases & Best Practices:**
-
-*   Allow users to update only the fields they want to change.
-*   Provide immediate feedback on the success or failure of the update.
-
-### `POST /users/{user_id}/follow`
-
-Follows or unfollows a user.
-
-**Request:**
-
-*   Requires authentication.
-*   `user_id` (path parameter, string, required): The ID of the user to follow/unfollow.
-
-**Responses:**
-
-*   **200 OK:**
-
+### 2. Update user profile
+- **Endpoint:** `PUT /users/profile`
+- **Description:** Updates the profile of the currently authenticated user.
+- **Request Body:** `multipart/form-data`
+  - `update_data`: A JSON string with the fields to update.
     ```json
     {
-      "following": true, // or false if unfollowed
-      "followers_count": 11,
-      "following_count": 5
+      "username": "string",
+      "email": "user@example.com",
+      "first_name": "string",
+      "last_name": "string",
+      "bio": "string"
     }
     ```
+  - `avatar_file`: An image file (JPG, JPEG, PNG).
+- **Responses:**
+  - **200 OK:** The updated user object.
+  - **400 Bad Request:** Invalid file type/size or username/email already taken.
+  - **500 Internal Server Error:** An error occurred.
 
-*   **400 Bad Request:** If a user tries to follow themselves: `{"detail": "Cannot follow yourself"}`
-*   **401 Unauthorized:** Not authenticated.
-*   **404 Not Found:** If the user with `user_id` does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
+### 3. Get user profile
+- **Endpoint:** `GET /users/{user_id}/profile`
+- **Description:** Retrieves the profile information of a specific user.
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:** A user object with an additional `is_following` field.
+  - **500 Internal Server Error:** An error occurred.
 
-### `GET /users/{user_id}/profile`
-
-Retrieves the profile of a specific user, including their posts.
-
-**Request:**
-
-*   Requires authentication.
-*   `user_id` (path parameter, string, required): The ID of the user.
-
-**Responses:**
-
-*   **200 OK:**
-
+### 4. Get user followers
+- **Endpoint:** `GET /users/{user_id}/followers`
+- **Description:** Retrieves a list of users who are following a specific user.
+- **Query Parameters:**
+  - `offset`: `integer` (default: 0)
+  - `limit`: `integer` (default: 20, max: 100)
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:** A list of user objects.
     ```json
-    {
-      "profile_user": {
+    [
+      {
         "user_id": "user_uuid",
-        "username": "otheruser",
-        "full_name": "Other User",
-        "bio": "Another bio.",
-        "avatar_url": "https://example.com/other_avatar.jpg",
-        "followers_count": 15,
-        "following_count": 8,
-        "posts_count": 5,
-        "is_following": true, // if the current user is following this user
-        "created_at": "2025-08-27T10:00:00Z"
-      },
-      "posts": [ /* list of post objects */ ],
-      "total_posts": 5,
-      "total_followers": 15,
-      "total_following": 8
-    }
+        "username": "string",
+        "email": "user@example.com",
+        "full_name": "string",
+        "bio": "string",
+        "avatar_url": "string",
+        "followers_count": 0,
+        "following_count": 0,
+        "posts_count": 0,
+        "created_at": "2025-09-06T12:00:00Z"
+      }
+    ]
     ```
-
-*   **401 Unauthorized:** Not authenticated.
-*   **404 Not Found:** If the user with `user_id` does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `GET /users/{user_id}/followers`
-
-Retrieves the list of followers for a specific user.
-
-**Request:**
-
-*   Requires authentication.
-*   `user_id` (path parameter, string, required): The ID of the user.
-*   `offset` (query parameter, integer, optional, default: 0): The number of followers to skip.
-*   `limit` (query parameter, integer, optional, default: 20, max: 100): The maximum number of followers to return.
-
-**Responses:**
-
-*   **200 OK:** A list of user objects.
-
-*   **401 Unauthorized:** Not authenticated.
-*   **404 Not Found:** If the user with `user_id` does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `GET /users/{user_id}/following`
-
-Retrieves the list of users that a specific user is following.
-
-**Request:**
-
-*   Requires authentication.
-*   `user_id` (path parameter, string, required): The ID of the user.
-*   `offset` (query parameter, integer, optional, default: 0): The number of users to skip.
-*   `limit` (query parameter, integer, optional, default: 20, max: 100): The maximum number of users to return.
-
-**Responses:**
-
-*   **200 OK:** A list of user objects.
-
-*   **401 Unauthorized:** Not authenticated.
-*   **404 Not Found:** If the user with `user_id` does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-## Posts
-
-Endpoints for managing posts (PDFs).
-
-### `GET /posts`
-
-Lists public posts with pagination.
-
-**Request:**
-
-*   Requires authentication.
-*   `offset` (query parameter, integer, optional, default: 0): The number of posts to skip.
-*   `limit` (query parameter, integer, optional, default: 10, max: 50): The maximum number of posts to return.
-
-**Responses:**
-
-*   **200 OK:** A list of post objects.
-
-*   **401 Unauthorized:** Not authenticated.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `POST /posts`
-
-Creates a new PDF post.
-
-**Request:**
-
-*   Requires authentication.
-*   The request must be `multipart/form-data`.
-
-**Request Body:**
-
-*   `pdf_file` (file, required): The PDF file to upload (max 50MB).
-*   `title` (string, optional): The title of the post. If not provided, it will be generated from the filename.
-*   `description` (string, optional): A description of the post.
-*   `is_public` (boolean, optional, default: true): Whether the post is public or private.
-
-**Responses:**
-
-*   **200 OK:** The created post object.
-
-*   **400 Bad Request:**
-    *   If the file is not a PDF: `{"detail": "Only PDF files are allowed"}`
-    *   If the file size exceeds the limit: `{"detail": "File size too large (max 50MB)"}`
-
-*   **401 Unauthorized:** Not authenticated.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-**Edge Cases & Best Practices:**
-
-*   This endpoint performs background processing for PDF embeddings. The response is returned immediately, but the embeddings might take some time to be ready for the chat feature.
-*   Provide feedback to the user about the upload progress.
-
-### `GET /posts/feed`
-
-Retrieves a personalized feed of posts from users that the current user follows.
-
-**Request:**
-
-*   Requires authentication.
-*   `offset` (query parameter, integer, optional, default: 0): The number of posts to skip.
-*   `limit` (query parameter, integer, optional, default: 10, max: 50): The maximum number of posts to return.
-
-**Responses:**
-
-*   **200 OK:** A list of post objects. If the user is not following anyone, it returns public posts.
-
-*   **401 Unauthorized:** Not authenticated.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `GET /posts/search`
-
-Searches for posts by title.
-
-**Request:**
-
-*   Requires authentication.
-*   `q` (query parameter, string, required): The search query (min 1 character).
-*   `offset` (query parameter, integer, optional, default: 0): The number of posts to skip.
-*   `limit` (query parameter, integer, optional, default: 10, max: 50): The maximum number of posts to return.
-
-**Responses:**
-
-*   **200 OK:** A list of post objects matching the search query.
-
-*   **401 Unauthorized:** Not authenticated.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `GET /posts/{post_id}`
-
-Retrieves the details of a single post.
-
-**Request:**
-
-*   Requires authentication.
-*   `post_id` (path parameter, string, required): The ID of the post.
-
-**Responses:**
-
-*   **200 OK:** The post object.
-
-*   **401 Unauthorized:** Not authenticated.
-*   **404 Not Found:** If the post with `post_id` does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `PUT /posts/{post_id}`
-
-Updates a post.
-
-**Request:**
-
-*   Requires authentication.
-*   `post_id` (path parameter, string, required): The ID of the post to update.
-
-**Request Body:**
-
-*   `title` (string, optional): The new title.
-*   `description` (string, optional): The new description.
-*   `is_public` (boolean, optional): The new visibility status.
-
-**Responses:**
-
-*   **200 OK:** The updated post object.
-
-*   **401 Unauthorized:** Not authenticated.
-*   **403 Forbidden:** If the user is not the owner of the post.
-*   **404 Not Found:** If the post does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `DELETE /posts/{post_id}`
-
-Deletes a post.
-
-**Request:**
-
-*   Requires authentication.
-*   `post_id` (path parameter, string, required): The ID of the post to delete.
-
-**Responses:**
-
-*   **200 OK:** `{"message": "Post deleted successfully"}`
-
-*   **401 Unauthorized:** Not authenticated.
-*   **403 Forbidden:** If the user is not the owner of the post.
-*   **404 Not Found:** If the post does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `PATCH /posts/{post_id}/visibility`
-
-Toggles the public/private visibility of a post.
-
-**Request:**
-
-*   Requires authentication.
-*   `post_id` (path parameter, string, required): The ID of the post.
-
-**Responses:**
-
-*   **200 OK:** `{"is_public": true}` or `{"is_public": false}`
-
-*   **401 Unauthorized:** Not authenticated.
-*   **403 Forbidden:** If the user is not the owner of the post.
-*   **404 Not Found:** If the post does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `POST /posts/{post_id}/like`
-
-Toggles a like on a post.
-
-**Request:**
-
-*   Requires authentication.
-*   `post_id` (path parameter, string, required): The ID of the post.
-
-**Responses:**
-
-*   **200 OK:**
-
-    ```json
-    {
-      "is_liked": true, // or false if unliked
-      "likes_count": 25
-    }
-    ```
-
-*   **401 Unauthorized:** Not authenticated.
-*   **404 Not Found:** If the post does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `GET /posts/{post_id}/comments`
-
-Retrieves the comments for a post.
-
-**Request:**
-
-*   Requires authentication.
-*   `post_id` (path parameter, string, required): The ID of the post.
-*   `offset` (query parameter, integer, optional, default: 0): The number of comments to skip.
-*   `limit` (query parameter, integer, optional, default: 20, max: 100): The maximum number of comments to return.
-
-**Responses:**
-
-*   **200 OK:** A list of comment objects.
-
-*   **401 Unauthorized:** Not authenticated.
-*   **404 Not Found:** If the post does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `POST /posts/{post_id}/comments`
-
-Adds a comment to a post.
-
-**Request:**
-
-*   Requires authentication.
-*   `post_id` (path parameter, string, required): The ID of the post.
-*   The request should be `multipart/form-data`.
-
-**Request Body:**
-
-*   `content` (string, required): The content of the comment (1-1000 characters).
-
-**Responses:**
-
-*   **200 OK:** The created comment object.
-
-*   **401 Unauthorized:** Not authenticated.
-*   **404 Not Found:** If the post does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `GET /posts/{post_id}/messages`
-
-Retrieves the chat messages for a post.
-
-**Request:**
-
-*   Requires authentication.
-*   `post_id` (path parameter, string, required): The ID of the post.
-
-**Responses:**
-
-*   **200 OK:** A list of chat message objects.
-
-*   **401 Unauthorized:** Not authenticated.
-*   **404 Not Found:** If the post does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-### `POST /posts/{post_id}/messages`
-
-Sends a chat message to a post's chat. This is used for the "chat with PDF" feature.
-
-**Request:**
-
-*   Requires authentication.
-*   `post_id` (path parameter, string, required): The ID of the post.
-
-**Request Body:**
-
-*   `query` (string, required): The user's message or question (1-1000 characters).
-
-**Responses:**
-
-*   **200 OK:** The user's message object. The assistant's response is generated in the background.
-
-*   **401 Unauthorized:** Not authenticated.
-*   **404 Not Found:** If the post does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
-
-**Edge Cases & Best Practices:**
-
-*   The assistant's response is not returned immediately. You should implement a mechanism (e.g., WebSockets or polling) to receive the assistant's message once it's ready. The initial response for the assistant will be "Thinking...".
-
-### `DELETE /posts/messages/{message_id}`
-
-Deletes a chat message.
-
-**Request:**
-
-*   Requires authentication.
-*   `message_id` (path parameter, string, required): The ID of the message to delete.
-
-**Responses:**
-
-*   **200 OK:** `{"message": "Message deleted successfully"}`
-
-*   **401 Unauthorized:** Not authenticated.
-*   **403 Forbidden:** If the user is not the owner of the conversation.
-*   **404 Not Found:** If the message does not exist.
-*   **500 Internal Server Error:** An unexpected error occurred.
+  - **500 Internal Server Error:** An error occurred.
+
+### 5. Get user following
+- **Endpoint:** `GET /users/{user_id}/following`
+- **Description:** Retrieves a list of users that a specific user is following.
+- **Query Parameters:**
+  - `offset`: `integer` (default: 0)
+  - `limit`: `integer` (default: 20, max: 100)
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:** A list of user objects.
+  - **500 Internal Server Error:** An error occurred.
+
+### 6. Get user posts
+- **Endpoint:** `GET /users/{user_id}/posts`
+- **Description:** Retrieves a list of posts created by a specific user.
+- **Query Parameters:**
+  - `offset`: `integer` (default: 0)
+  - `limit`: `integer` (default: 10, max: 50)
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:** A list of post objects.
+  - **500 Internal Server Error:** An error occurred.
+
+### 7. Get user bookmarks
+- **Endpoint:** `GET /users/{user_id}/bookmarks`
+- **Description:** Retrieves a list of posts bookmarked by the current user.
+- **Query Parameters:**
+  - `offset`: `integer` (default: 0)
+  - `limit`: `integer` (default: 20, max: 100)
+- **Request Body:** None.
+- **Responses:**
+  - **200 OK:** A list of post objects.
+  - **403 Forbidden:** Users can only view their own bookmarks.
+  - **500 Internal Server Error:** An error occurred.

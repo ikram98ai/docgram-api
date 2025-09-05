@@ -461,11 +461,11 @@ async def delete_post(
             )
 
         # Delete from S3 (optional - you might want to keep files for backup)
-        await delete_from_s3(key=post.pdf_url.split("/")[-1])
+        delete_from_s3(key=post.pdf_url.split("/")[-1])
 
         # Delete from DynamoDB
         post.delete()
-        await delete_embeddings(post.post_id)
+        delete_embeddings(post.post_id)
         # Update user's post count
         user = get_user_by_id(current_user_id)
         user.posts_count = max(0, user.posts_count - 1)
