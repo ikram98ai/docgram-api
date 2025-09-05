@@ -10,7 +10,7 @@ from ..dependencies import get_current_user_id
 from .utils import response_generator
 
 # Import our models
-from ..models import  ChatConversationModel, ChatMessageModel
+from ..models import ChatConversationModel, ChatMessageModel
 from ..schemas import ChatMessage, MessageRequest
 
 
@@ -119,15 +119,21 @@ async def post_message(
             timestamp=datetime.now(timezone.utc),
         )
         user_message.save()
-        
-        chat_messages = list(ChatMessageModel.conversation_messages_index.query(
-            hash_key=conversation_id, scan_index_forward=True, limit=10
-        ))
+
+        chat_messages = list(
+            ChatMessageModel.conversation_messages_index.query(
+                hash_key=conversation_id, scan_index_forward=True, limit=10
+            )
+        )
         messages = []
         if chat_messages:
-            messages = [{"role": msg.role, "content": msg.content} for msg in chat_messages]
+            messages = [
+                {"role": msg.role, "content": msg.content} for msg in chat_messages
+            ]
 
-        return StreamingResponse(response_generator(post_id, messages, conversation), media_type="text/plain")
+        return StreamingResponse(
+            response_generator(post_id, messages, conversation), media_type="text/plain"
+        )
 
     except Exception as e:
         logger.error(f"Error posting message to {post_id}: {e}")

@@ -28,7 +28,7 @@ async def get_current_user_info(
     current_user_id: UserModel = Depends(get_current_user_id),
 ):
     """Get current user information"""
-    current_user = await get_user_by_id(current_user_id)
+    current_user = get_user_by_id(current_user_id)
     return User(
         user_id=current_user.user_id,
         username=current_user.username,
@@ -55,7 +55,7 @@ async def update_user_profile(
         update_data = UserUpdateRequest.model_validate_json(update_data)
 
     try:
-        current_user = await get_user_by_id(current_user_id)
+        current_user = get_user_by_id(current_user_id)
         # Handle avatar upload if provided
         if avatar_file:
             if not avatar_file.filename.lower().endswith((".jpg", ".jpeg", ".png")):
@@ -72,7 +72,7 @@ async def update_user_profile(
             # Upload avatar to S3
             avatar_content = await avatar_file.read()
             avatar_key = f"{STAGE}/avatars/{current_user.user_id}_{uuid.uuid4()}.jpg"
-            avatar_url = await upload_to_s3(avatar_content, avatar_key, "image/jpeg")
+            avatar_url = upload_to_s3(avatar_content, avatar_key, "image/jpeg")
             current_user.avatar_url = avatar_url
 
         # Update user fields
@@ -140,7 +140,7 @@ async def get_user_profile(
 ):
     """Get user profile with posts and stats"""
     try:
-        user = await get_user_by_id(user_id)
+        user = get_user_by_id(user_id)
 
         # Get follow context
         context = get_current_user_context(current_user_id, target_user_id=user_id)

@@ -107,7 +107,7 @@ class RAGIndexer:
         # NOTE: Pinecone SDK specific methods differ by version; adapt if required.
         logger.debug("Index exists or was created.")
 
-    async def _extract_text_from_pdf(self, file_bytes: bytes) -> str:
+    def _extract_text_from_pdf(self, file_bytes: bytes) -> str:
         md = MarkItDown()
         buffer = io.BytesIO(file_bytes)
         result = md.convert(buffer)
@@ -117,14 +117,14 @@ class RAGIndexer:
         )
         return text_content
 
-    async def pdf_to_chunks(
+    def pdf_to_chunks(
         self, pdf_bytes: bytes, chunk_size: int = 1000, overlap: int = 200
     ) -> List[Dict]:
         """
         Returns list of dicts:
             {"chunk_id": str, "text": str, "source": filename, "start": int, "end": int}
         """
-        content = await self._extract_text_from_pdf(pdf_bytes)
+        content = self._extract_text_from_pdf(pdf_bytes)
         chunks_meta = _smart_chunk_text(content, chunk_size=chunk_size, overlap=overlap)
         chunks = []
         for idx, (chunk_text, start, end) in enumerate(chunks_meta):
@@ -159,10 +159,9 @@ class RAGIndexer:
                     raise
         return []
 
-    def delete_embeddings(self ,post_id:str):
+    def delete_embeddings(self, post_id: str):
         index = self.pc.Index(self.index_name)
-        index.delete(filter={"post_id":post_id})
-
+        index.delete(filter={"post_id": post_id})
 
     def upsert_chunks(
         self,
@@ -214,7 +213,7 @@ class RAGIndexer:
                 # continue with remaining batches
         return f"upserted {total_upserted} chunks"
 
-    async def upsert_pdf(
+    def upsert_pdf(
         self,
         pdf_bytes: bytes,
         title: str,
@@ -227,9 +226,7 @@ class RAGIndexer:
         High-level helper: read PDF (async UploadFile) and upsert chunks.
         This function is now async; await pdf.read before calling.
         """
-        chunks = await self.pdf_to_chunks(
-            pdf_bytes, chunk_size=chunk_size, overlap=overlap
-        )
+        chunks = self.pdf_to_chunks(pdf_bytes, chunk_size=chunk_size, overlap=overlap)
         return self.upsert_chunks(chunks, title, post_id=post_id, batch_size=batch_size)
 
     def retrieval(

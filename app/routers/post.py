@@ -21,7 +21,7 @@ from .utils import (
     get_user_by_id,
     background_create_post,
     delete_embeddings,
-    semantic_search
+    semantic_search,
 )
 
 # Import our models
@@ -232,7 +232,7 @@ async def search_posts(
         # You might want to use OpenSearch/Elasticsearch for better search
         # For now, we'll do a scan with filter (not optimal for large datasets)
 
-        post_ids = await semantic_search(q)
+        post_ids = semantic_search(q)
         # Apply pagination
         paginated_post_ids = post_ids[offset : offset + limit]
 
@@ -308,7 +308,7 @@ async def create_post(
 
     if pdf_file.size > 50 * 1024 * 1024:  # 50MB limit
         raise HTTPException(status_code=400, detail="File size too large (max 50MB)")
-    
+
     try:
         pdf_content = await pdf_file.read()
 
@@ -319,11 +319,21 @@ async def create_post(
         else:
             title = title.title()
 
-        background_tasks.add_task(background_create_post,pdf_content, title, is_public, description, current_user_id) 
-        return {"message": "Post creation is in progress. You will be notified shortly."}
+        background_tasks.add_task(
+            background_create_post,
+            pdf_content,
+            title,
+            is_public,
+            description,
+            current_user_id,
+        )
+        return {
+            "message": "Post creation is in progress. You will be notified shortly."
+        }
     except Exception as e:
         logger.error(f"Error creating post: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create post: {str(e)}")
+
 
 @router.get("/{post_id}", response_model=Post)
 async def get_post_detail(
@@ -331,8 +341,8 @@ async def get_post_detail(
 ):
     """Get post details"""
     try:
-        post = await get_post_by_id(post_id)
-        user = await get_user_by_id(post.user_id)
+        post = get_post_by_id(post_id)
+        user = get_user_by_id(post.user_id)
 
         # Get context
         context = get_current_user_context(current_user_id, post_id=post_id)
@@ -371,6 +381,7 @@ async def get_post_detail(
         logger.error(f"Error getting post {post_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.put("/{post_id}", response_model=Post)
 async def update_post(
     post_id: str = Path(...),
@@ -379,7 +390,7 @@ async def update_post(
 ):
     """Update a post"""
     try:
-        post = await get_post_by_id(post_id)
+        post = get_post_by_id(post_id)
 
         # Check ownership
         if post.user_id != current_user_id:
@@ -399,7 +410,7 @@ async def update_post(
         post.save()
 
         # Get user info for response
-        user = await get_user_by_id(post.user_id)
+        user = get_user_by_id(post.user_id)
         user_dict = User(
             user_id=user.user_id,
             username=user.username,
@@ -441,7 +452,7 @@ async def delete_post(
 ):
     """Delete a post"""
     try:
-        post = await get_post_by_id(post_id)
+        post = get_post_by_id(post_id)
 
         # Check ownership
         if post.user_id != current_user_id:
@@ -450,13 +461,13 @@ async def delete_post(
             )
 
         # Delete from S3 (optional - you might want to keep files for backup)
-        await delete_from_s3(key=post.pdf_url.split('/')[-1])
+        await delete_from_s3(key=post.pdf_url.split("/")[-1])
 
         # Delete from DynamoDB
         post.delete()
         await delete_embeddings(post.post_id)
         # Update user's post count
-        user = await get_user_by_id(current_user_id)
+        user = get_user_by_id(current_user_id)
         user.posts_count = max(0, user.posts_count - 1)
         user.save()
 
@@ -535,7 +546,7 @@ async def create_comment(
     """Create a comment on a post"""
     try:
         # Verify post exists
-        post = await get_post_by_id(post_id)
+        post = get_post_by_id(post_id)
 
         # Create comment
         comment = CommentModel(
@@ -552,7 +563,7 @@ async def create_comment(
         post.save()
 
         # Get user info for response
-        user = await get_user_by_id(current_user_id)
+        user = get_user_by_id(current_user_id)
         user_dict = User(
             user_id=user.user_id,
             username=user.username,

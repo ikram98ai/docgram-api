@@ -31,8 +31,8 @@ async def toggle_follow(
             raise HTTPException(status_code=400, detail="Cannot follow yourself")
 
         # Check if target user exists
-        target_user = await get_user_by_id(user_id)
-        current_user = await get_user_by_id(current_user_id)
+        target_user = get_user_by_id(user_id)
+        current_user = get_user_by_id(current_user_id)
 
         relationship_id = FollowModel.create_relationship_id(current_user_id, user_id)
 
@@ -84,7 +84,7 @@ async def toggle_like(
 ):
     """Toggle like on a post"""
     try:
-        post = await get_post_by_id(post_id)
+        post = get_post_by_id(post_id)
         like_id = LikeModel.create_like_id(post_id, current_user_id)
 
         try:
@@ -121,7 +121,7 @@ async def toggle_bookmark(
 ):
     """Toggle bookmark on a post"""
     try:
-        _ = await get_post_by_id(post_id)
+        _ = get_post_by_id(post_id)
         bookmark_id = BookmarkModel.create_bookmark_id(post_id, current_user_id)
 
         try:
@@ -154,7 +154,7 @@ async def toggle_post_visibility(
 ):
     """Toggle post public/private visibility"""
     try:
-        post = await get_post_by_id(post_id)
+        post = get_post_by_id(post_id)
 
         # Check ownership
         if post.user_id != current_user_id:
