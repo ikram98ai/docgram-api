@@ -42,7 +42,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def upload_to_s3(file_content: bytes, key: str, content_type: str) -> str:
+async def upload_to_s3(file_content: bytes, key: str, content_type: str) -> str:
     """Upload file to S3 and return URL"""
     try:
         s3_client.put_object(
@@ -54,7 +54,7 @@ def upload_to_s3(file_content: bytes, key: str, content_type: str) -> str:
         raise HTTPException(status_code=500, detail="File upload failed")
 
 
-def delete_from_s3(key: str):
+async def delete_from_s3(key: str):
     """Delete file from S3"""
     try:
         s3_client.delete_object(Bucket=S3_BUCKET, Key=key)

@@ -15,13 +15,13 @@ from fastapi import (
     APIRouter,
 )
 from ..dependencies import get_current_user_id
-from ..utils import upload_to_s3
+from ..utils import delete_from_s3
 from .utils import (
     get_post_by_id,
     get_user_by_id,
-    get_pdf_page_count,
-    generate_pdf_thumbnail,
-    process_pdf_embeddings,
+    background_create_post,
+    delete_embeddings,
+    semantic_search
 )
 
 # Import our models
@@ -223,7 +223,7 @@ async def get_user_feed(
 async def search_posts(
     q: str = Query(..., min_length=1),
     offset: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=50),
+    limit: int = Query(20, ge=1, le=50),
     current_user_id: str = Depends(get_current_user_id),
 ):
     """Search posts by title"""
@@ -232,23 +232,17 @@ async def search_posts(
         # You might want to use OpenSearch/Elasticsearch for better search
         # For now, we'll do a scan with filter (not optimal for large datasets)
 
-        posts = []
-        for post in PostModel.scan(
-            filter_condition=PostModel.title.contains(q)
-            | PostModel.title.contains(q.lower())
-            | PostModel.title.contains(q.title())
-        ):
-            posts.append(post)
-
-        # Sort by creation date (newest first)
-        posts.sort(key=lambda x: x.created_at, reverse=True)
-
+        post_ids = await semantic_search(q)
         # Apply pagination
-        paginated_posts = posts[offset : offset + limit]
+        paginated_post_ids = post_ids[offset : offset + limit]
+
+        posts = PostModel.batch_get(paginated_post_ids)
+        # Sort by creation date (newest first)
+        # posts = sorted(posts, key=lambda x: x.created_at, reverse=True)
 
         # Convert to response format
         result = []
-        for post in paginated_posts:
+        for post in posts:
             try:
                 user = UserModel.get(post.user_id)
                 context = get_current_user_context(
@@ -297,6 +291,40 @@ async def search_posts(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/", response_model=dict)
+async def create_post(
+    background_tasks: BackgroundTasks,
+    pdf_file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    is_public: bool = Form(True),
+    current_user_id: str = Depends(get_current_user_id),
+):
+    """Create a new PDF post"""
+
+    # Validate PDF file
+    if not pdf_file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    if pdf_file.size > 50 * 1024 * 1024:  # 50MB limit
+        raise HTTPException(status_code=400, detail="File size too large (max 50MB)")
+    
+    try:
+        pdf_content = await pdf_file.read()
+
+        # Generate title if not provided
+        if not title:
+            filename = os.path.basename(pdf_file.filename)
+            title = os.path.splitext(filename)[0].title()
+        else:
+            title = title.title()
+
+        background_tasks.add_task(background_create_post,pdf_content, title, is_public, description, current_user_id) 
+        return {"message": "Post creation is in progress. You will be notified shortly."}
+    except Exception as e:
+        logger.error(f"Error creating post: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create post: {str(e)}")
+
 @router.get("/{post_id}", response_model=Post)
 async def get_post_detail(
     post_id: str = Path(...), current_user_id: str = Depends(get_current_user_id)
@@ -342,109 +370,6 @@ async def get_post_detail(
     except Exception as e:
         logger.error(f"Error getting post {post_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/", response_model=Post)
-async def create_post(
-    background_tasks: BackgroundTasks,
-    pdf_file: UploadFile = File(...),
-    title: Optional[str] = Form(None),
-    description: Optional[str] = Form(None),
-    is_public: bool = Form(True),
-    current_user_id: str = Depends(get_current_user_id),
-):
-    """Create a new PDF post"""
-
-    # Validate PDF file
-    if not pdf_file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
-
-    if pdf_file.size > 50 * 1024 * 1024:  # 50MB limit
-        raise HTTPException(status_code=400, detail="File size too large (max 50MB)")
-
-    try:
-        # Read PDF content
-        pdf_content = await pdf_file.read()
-
-        # Generate title if not provided
-        if not title:
-            filename = os.path.basename(pdf_file.filename)
-            title = os.path.splitext(filename)[0].title()
-        else:
-            title = title.title()
-
-        # Get page count
-        page_count = get_pdf_page_count(pdf_content)
-
-        # Generate post ID
-        post_id = str(uuid.uuid4())
-
-        # Upload PDF to S3
-        pdf_key = f"{STAGE}/pdfs/{post_id}.pdf"
-        pdf_url = upload_to_s3(pdf_content, pdf_key, "application/pdf")
-
-        # Generate thumbnail
-        thumbnail_url = generate_pdf_thumbnail(pdf_content, post_id)
-
-        # Create post in DynamoDB
-        post = PostModel(
-            post_id=post_id,
-            user_id=current_user_id,
-            title=title,
-            description=description,
-            pdf_url=pdf_url,
-            thumbnail_url=thumbnail_url,
-            file_size=len(pdf_content),
-            page_count=page_count,
-            is_public=int(is_public),
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
-        post.save()
-
-        # Update user's post count
-        user = await get_user_by_id(current_user_id)
-        user.posts_count += 1
-        user.save()
-
-        # Schedule background PDF processing
-        background_tasks.add_task(process_pdf_embeddings, pdf_content, post_id, title)
-
-        # Return created post
-        user_dict = User(
-            user_id=user.user_id,
-            username=user.username,
-            email=user.email,
-            full_name=f"{user.first_name or ''} {user.last_name or ''}",
-            bio=user.bio,
-            avatar_url=user.avatar_url,
-            followers_count=user.followers_count,
-            following_count=user.following_count,
-            posts_count=user.posts_count,
-            created_at=user.created_at,
-        ).dict()
-
-        return Post(
-            id=post.post_id,
-            user_id=post.user_id,
-            user=user_dict,
-            title=post.title,
-            description=post.description,
-            pdf_url=post.pdf_url,
-            thumbnail_url=post.thumbnail_url,
-            file_size=post.file_size,
-            page_count=post.page_count,
-            likes_count=0,
-            comments_count=0,
-            shares_count=0,
-            is_liked=False,
-            created_at=post.created_at,
-        )
-
-    except Exception as e:
-        logger.error(f"Error creating post: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create post: {str(e)}")
-
 
 @router.put("/{post_id}", response_model=Post)
 async def update_post(
@@ -525,11 +450,11 @@ async def delete_post(
             )
 
         # Delete from S3 (optional - you might want to keep files for backup)
-        # delete_from_s3(key=post.pdf_url.split('/')[-1])
+        await delete_from_s3(key=post.pdf_url.split('/')[-1])
 
         # Delete from DynamoDB
         post.delete()
-
+        await delete_embeddings(post.post_id)
         # Update user's post count
         user = await get_user_by_id(current_user_id)
         user.posts_count = max(0, user.posts_count - 1)

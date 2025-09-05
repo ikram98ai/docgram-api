@@ -159,6 +159,11 @@ class RAGIndexer:
                     raise
         return []
 
+    def delete_embeddings(self ,post_id:str):
+        index = self.pc.Index(self.index_name)
+        index.delete(filter={"post_id":post_id})
+
+
     def upsert_chunks(
         self,
         chunks: List[Dict],

@@ -3,25 +3,15 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import List
-from fastapi import (
-    HTTPException,
-    Depends,
-    Path,
-)
+from fastapi import HTTPException, Depends, Path
 from fastapi.responses import StreamingResponse
+
 from ..dependencies import get_current_user_id
-from .utils import get_post_by_id
+from .utils import response_generator
 
 # Import our models
-from ..models import (
-    ChatConversationModel,
-    ChatMessageModel,
-)
-from ..schemas import (
-    ChatMessage,
-    MessageRequest,
-)
-from ..ai.ai_agents import agent_runner
+from ..models import  ChatConversationModel, ChatMessageModel
+from ..schemas import ChatMessage, MessageRequest
 
 
 logger = logging.getLogger(__name__)
@@ -108,7 +98,6 @@ async def post_message(
     try:
         # Find or create conversation
         conversation_id = f"{post_id}#{current_user_id}"
-        post = await get_post_by_id(post_id)
         try:
             conversation = ChatConversationModel.get(conversation_id)
         except ChatConversationModel.DoesNotExist:
@@ -130,37 +119,15 @@ async def post_message(
             timestamp=datetime.now(timezone.utc),
         )
         user_message.save()
-        query = message_request.query + " in " + post.title
         
         chat_messages = list(ChatMessageModel.conversation_messages_index.query(
             hash_key=conversation_id, scan_index_forward=True, limit=10
         ))
-
         messages = []
         if chat_messages:
             messages = [{"role": msg.role, "content": msg.content} for msg in chat_messages]
-        messages.append({"role": "user", "content": query})
-        print("Messages to send to agent:", messages)
-        async def response_generator():
-            complete_response = ""
-            async for chunk in agent_runner(messages, post_id=post_id):
-                complete_response += chunk
-                yield chunk
 
-            # After streaming completes, save the assistant message
-            conversation.updated_at = datetime.now(timezone.utc)
-            conversation.save()
-
-            assistant_message = ChatMessageModel(
-                message_id=str(uuid.uuid4()),
-                conversation_id=conversation_id,
-                role="assistant",
-                content=complete_response,
-                timestamp=datetime.now(timezone.utc),
-            )
-            assistant_message.save()
-
-        return StreamingResponse(response_generator(), media_type="text/plain")
+        return StreamingResponse(response_generator(post_id, messages, conversation), media_type="text/plain")
 
     except Exception as e:
         logger.error(f"Error posting message to {post_id}: {e}")

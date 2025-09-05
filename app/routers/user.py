@@ -72,7 +72,7 @@ async def update_user_profile(
             # Upload avatar to S3
             avatar_content = await avatar_file.read()
             avatar_key = f"{STAGE}/avatars/{current_user.user_id}_{uuid.uuid4()}.jpg"
-            avatar_url = upload_to_s3(avatar_content, avatar_key, "image/jpeg")
+            avatar_url = await upload_to_s3(avatar_content, avatar_key, "image/jpeg")
             current_user.avatar_url = avatar_url
 
         # Update user fields
