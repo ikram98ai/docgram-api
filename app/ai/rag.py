@@ -1,5 +1,5 @@
 import io
-import logging
+from ..log_conf import logging
 from markitdown import MarkItDown
 from openai import OpenAI
 from pinecone import Pinecone, ServerlessSpec
@@ -7,9 +7,8 @@ from typing import List, Dict, Optional, Tuple
 from uuid import uuid4
 from ..config import settings
 
-()
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # Config
 EMBED_MODEL = "text-embedding-004"

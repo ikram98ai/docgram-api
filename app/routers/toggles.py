@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-import logging
+from ..log_conf import logging
 from datetime import datetime, timezone
 from fastapi import (
     HTTPException,

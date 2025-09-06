@@ -1,4 +1,4 @@
-import logging
+from .log_conf import logging
 import os
 import boto3
 from botocore.exceptions import ClientError

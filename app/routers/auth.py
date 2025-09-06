@@ -3,15 +3,16 @@ from fastapi import APIRouter, status, HTTPException
 from datetime import datetime, timezone
 from typing import Optional
 import uuid
-import logging
+from ..log_conf import logging
 from ..schemas import User, TokenResponse, UserLoginRequest, UserRegistrationRequest
 from ..models import UserModel
 from ..dependencies import create_access_token
 from ..utils import verify_password, hash_password
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 
 router = APIRouter(tags=["Authentication"])
 

@@ -1,4 +1,4 @@
-import logging
+from ..log_conf import logging
 from typing import Optional, List
 from fastapi import HTTPException
 from datetime import datetime, timezone

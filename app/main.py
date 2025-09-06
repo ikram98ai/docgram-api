@@ -1,17 +1,15 @@
 # app/main.py
 from fastapi import FastAPI, Request, HTTPException
 from datetime import datetime, timezone
-import logging
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from mangum import Mangum
+from .log_conf import logging
 from . import routers
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-app = FastAPI(version="1.0.0")
+app = FastAPI(version="1.0.0", title="DocGram API")
 origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -20,6 +18,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 app.include_router(routers.user.router)
 app.include_router(routers.auth.router)

@@ -1,4 +1,3 @@
-import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -14,6 +13,7 @@ from fastapi import (
     BackgroundTasks,
     APIRouter,
 )
+from ..log_conf import logging
 from ..dependencies import get_current_user_id
 from ..utils import delete_from_s3
 from .utils import (
@@ -306,8 +306,8 @@ async def create_post(
     if not pdf_file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
-    if pdf_file.size > 50 * 1024 * 1024:  # 50MB limit
-        raise HTTPException(status_code=400, detail="File size too large (max 50MB)")
+    if pdf_file.size > 10 * 1024 * 1024:  # 50MB limit
+        raise HTTPException(status_code=400, detail="File size too large (max 10MB)")
 
     try:
         pdf_content = await pdf_file.read()
