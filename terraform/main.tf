@@ -197,7 +197,7 @@ resource "aws_s3_bucket_policy" "docgram_storage_policy" {
     ]
   })
     depends_on = [
-    aws_s3_bucket_public_access_block.aitutor_storage_public_access
+    aws_s3_bucket_public_access_block.docgram_storage_public_access
   ]
 }
 
