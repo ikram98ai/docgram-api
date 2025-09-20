@@ -12,7 +12,7 @@ from ..schemas import User, UserUpdateRequest, Post
 from ..models import PostModel
 from ..utils import upload_to_s3
 from .utils import get_user_by_id
-
+from ..config import settings
 # Configure logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -20,7 +20,7 @@ logger.setLevel(logging.INFO)
 router = APIRouter(prefix="/users", tags=["Users"])
 
 # AWS clients (initialized once for Lambda container reuse)
-STAGE = os.getenv("STAGE", "dev")
+STAGE = settings.stage
 
 
 @router.get("/me", response_model=User)

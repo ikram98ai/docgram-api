@@ -13,6 +13,7 @@ from fastapi import (
     BackgroundTasks,
     APIRouter,
 )
+from ..config import settings
 from ..log_conf import logging
 from ..dependencies import get_current_user_id
 from ..utils import delete_from_s3
@@ -47,7 +48,7 @@ logger.setLevel(logging.INFO)
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
 # AWS clients (initialized once for Lambda container reuse)
-STAGE = os.getenv("STAGE", "dev")
+STAGE = settings.stage
 
 
 @router.get("/", response_model=List[Post])

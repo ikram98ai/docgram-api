@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Dict, Any
+from .config import settings
 import uuid
 from pynamodb.models import Model
 from pynamodb.attributes import (
@@ -13,8 +14,8 @@ from pynamodb.indexes import AllProjection, GlobalSecondaryIndex
 import os
 
 # Environment configuration for DynamoDB
-REGION = os.getenv("AWS_REGION", "us-east-1")
-STAGE = os.getenv("STAGE", "dev")
+REGION = settings.aws_region
+STAGE = settings.stage
 
 
 class UserEmailIndex(GlobalSecondaryIndex):

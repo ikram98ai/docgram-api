@@ -5,7 +5,7 @@ from botocore.exceptions import ClientError
 from fastapi import HTTPException
 from passlib.context import CryptContext
 import re
-
+from .config import settings
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ logger.setLevel(logging.INFO)
 
 
 s3_client = boto3.client("s3")
-S3_BUCKET = os.getenv("S3_BUCKET_NAME", "docgram-files")
+S3_BUCKET = settings.s3_bucket
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
