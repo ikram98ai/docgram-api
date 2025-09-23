@@ -1,31 +1,22 @@
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "function_name" {
+variable "project" {
   description = "Name of the Lambda function"
   type        = string
-  default     = "docgram-app"
 }
 
-variable "ecr_repository_name" {
-  description = "Name of the ECR repository"
+variable "region" {
+  description = "AWS region"
   type        = string
-  default     = "docgram-app"
+}
+
+variable "stage" {
+  description = "API Gateway stage name"
+  type        = string
 }
 
 variable "image_tag" {
   description = "Docker image tag"
   type        = string
   default     = "latest"
-}
-
-variable "stage_name" {
-  description = "API Gateway stage name"
-  type        = string
-  default     = "prod"
 }
 
 variable "tags" {
