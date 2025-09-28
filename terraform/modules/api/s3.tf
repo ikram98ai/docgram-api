@@ -1,9 +1,14 @@
 
 ############################################################# S3 BUCKET FOR STORING FILES #############################################################
+resource "random_id" "bucket_suffix" {
+  byte_length = 8 # Generates an 8-byte random string
+}
 
 resource "aws_s3_bucket" "docgram_storage" {
-  bucket = "docgram-files"
+  bucket = "docgram-files-${random_id.bucket_suffix.hex}"
   tags   = var.tags
+  force_destroy = true
+
 }
 
 resource "aws_s3_bucket_public_access_block" "docgram_storage_public_access" {
