@@ -27,10 +27,10 @@ module "api" {
 }
 
 
-module "etl" {
-  source = "./modules/etl"
+# module "etl" {
+#   source = "./modules/etl"
 
-  project             = var.project
-  region              = var.region
-  stage               = var.stage
-}
+#   project             = var.project
+#   region              = var.region
+#   stage               = var.stage
+# }
