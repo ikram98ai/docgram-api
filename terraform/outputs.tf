@@ -1,17 +1,17 @@
 # App Outputs
 output "api_gateway_url" {
   description = "API Gateway URL"
-  value       = module.api.aws_apigatewayv2_api.docgram_api.api_endpoint
+  value       = module.api.api_gateway_url
 }
 
 output "lambda_function_name" {
   description = "Lambda function name"
-  value       = module.api.aws_lambda_function.docgram_lambda.function_name
+  value       = module.api.lambda_function_name
 }
 
 output "ecr_repository_url" {
   description = "ECR repository URL"
-  value       = module.api.aws_ecr_repository.docgram_repo.repository_url
+  value       = module.api.ecr_repository_url
 }
 
 # # ETL
