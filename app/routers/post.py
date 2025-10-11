@@ -128,54 +128,21 @@ async def list_posts(
 
 
 @router.get("/feed", response_model=List[Post])
-async def get_user_feed(
-    offset: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=50),
-    current_user_id: str = Depends(get_current_user_id),
-):
+async def get_user_feed():
     """Get personalized feed based on following"""
     try:
-        # Get users that current user follows
-        following_user_ids = set()
-        for follow in FollowModel.follower_index.query(hash_key=current_user_id):
-            following_user_ids.add(follow.following_id)
 
-        # Add current user's posts
-        following_user_ids.add(current_user_id)
-
-        if not following_user_ids:
-            # If not following anyone, return public posts
-            return await list_posts(offset, limit, current_user_id)
-
-        # Get posts from followed users
-        all_posts = []
-        for user_id in following_user_ids:
-            try:
-                for post in PostModel.user_posts_index.query(
-                    hash_key=user_id,
-                    scan_index_forward=False,
-                    limit=50,  # Limit per user to prevent one user dominating feed
-                ):
-                    if post.is_public or post.user_id == current_user_id:
-                        all_posts.append(post)
-            except Exception as e:
-                logger.warning(f"Error fetching posts for user {user_id}: {e}")
-                continue
-
-        # Sort by creation date
-        all_posts.sort(key=lambda x: x.created_at, reverse=True)
-
-        # Apply pagination
-        paginated_posts = all_posts[offset : offset + limit]
+        all_posts = PostModel.public_posts_index.query(
+            1,   
+            scan_index_forward=False,
+            limit=50,  # Limit per user to prevent one user dominating feed
+        )       
 
         # Convert to response format
         result = []
-        for post in paginated_posts:
+        for post in all_posts:
             try:
                 user = UserModel.get(post.user_id)
-                context = get_current_user_context(
-                    current_user_id, post_id=post.post_id
-                )
 
                 user_dict = User(
                     user_id=user.user_id,
@@ -203,8 +170,8 @@ async def get_user_feed(
                     likes_count=post.likes_count,
                     comments_count=post.comments_count,
                     shares_count=post.shares_count,
-                    is_liked=context.get("is_liked", False),
-                    is_bookmarked=context.get("is_bookmarked", False),
+                    is_liked=False,
+                    is_bookmarked= False,
                     created_at=post.created_at,
                 ).dict()
 
@@ -216,7 +183,7 @@ async def get_user_feed(
         return result
 
     except Exception as e:
-        logger.error(f"Error getting feed for user {current_user_id}: {e}")
+        logger.error(f"Error getting feed for anonymous user: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -307,8 +274,8 @@ async def create_post(
     if not pdf_file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
-    if pdf_file.size > 10 * 1024 * 1024:  # 50MB limit
-        raise HTTPException(status_code=400, detail="File size too large (max 10MB)")
+    if pdf_file.size > 5 * 1024 * 1024:  # 50MB limit
+        raise HTTPException(status_code=400, detail="File size too large (max 5MB)")
 
     try:
         pdf_content = await pdf_file.read()
