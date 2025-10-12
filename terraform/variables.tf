@@ -13,7 +13,7 @@ variable "region" {
 variable "stage" {
   description = "API Gateway stage name"
   type        = string
-  default     = "prod"
+  default     = "dev"
 }
 
 variable "image_tag" {
