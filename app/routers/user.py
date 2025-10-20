@@ -1,5 +1,4 @@
 from ..log_conf import logging
-import os
 import uuid
 from typing import List, Optional
 from fastapi import HTTPException, Depends, UploadFile, File, Query, Path, Form

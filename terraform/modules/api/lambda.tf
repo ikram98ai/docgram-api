@@ -52,6 +52,7 @@ resource "aws_lambda_function" "docgram_lambda" {
     aws_cloudwatch_log_group.docgram_lambda_logs,
     null_resource.build_and_push_image,
     aws_ecr_repository_policy.docgram_repo_policy,
+    aws_s3_bucket.docgram_storage,
   ]
   tags = var.tags
 }

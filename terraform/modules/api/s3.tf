@@ -5,7 +5,7 @@ resource "random_id" "bucket_suffix" {
 }
 
 resource "aws_s3_bucket" "docgram_storage" {
-  bucket = "docgram-files-${random_id.bucket_suffix.hex}"
+  bucket = "docgram-files"
   tags   = var.tags
   force_destroy = true
 
