@@ -14,12 +14,6 @@ output "ecr_repository_url" {
   value       = module.api.ecr_repository_url
 }
 
-
-output "docgram_s3_bucket_url" {
-  value = module.api.docgram_s3_bucket
-}
-
-
 # # ETL
 # output "data_lake_bucket_id" {
 #   value = module.etl.data_lake_bucket_id
