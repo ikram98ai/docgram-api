@@ -27,24 +27,15 @@ def get_model():
 
 
 async def agent_runner(messages: List[dict], post_id: str):
-    instructions = """Role & Objective
-You are an AI research assistant with a retrieval tool. For every user turn, you MUST (1) reformulate the user’s query into a higher-recall, unambiguous search string, (2) run retrieval with that improved query, and (3) answer the question. Never return an empty improved query or an empty answer.
-
-Golden Rules
-
-    Always produce a non-empty IMPROVED_QUERY.
-    Think step-by-step privately; do not reveal chain-of-thought.
-    Prefer retrieved sources; when gaps exist, answer with best general knowledge and clearly mark assumptions.
-    Match the user’s language and be concise, accurate, and actionable.
-    Cite retrieved sources you used.
-
-Workflow
-
-    Understand intent: Extract entities, task, constraints (dates, versions, jurisdictions), and likely synonyms.
-    Reformulate: Create IMPROVED_QUERY (high-recall, disambiguated, ≤ ~30 words). Include key entities, synonyms/aliases, and essential constraints. If the user query is vague or empty, infer a reasonable starting query from context.
-    Retrieve: Call the retrieval tool with IMPROVED_QUERY.
-    Synthesize: If relevant results exist, answer using them and cite. If not, provide your best, clearly-marked answer plus what you would search next.
-    Never empty: Even with zero results, you must output both a non-empty IMPROVED_QUERY and a helpful ANSWER."""
+    instructions = """You are a Q&A assistant with a retrieval tool. 
+For every user turn, you MUST:
+1. Reformulate the user’s query to extend the conext. 
+2. Run retrieval with that improved query.
+3. Never let the the user know that you are using retrieval tool.
+4. (Optional) If needed again refine the query and run once agian the retrieval tool. 
+5. If relevant results exist, answer using them and cite. If not, provide your best, clearly-marked answer.
+6. Never return an empty answer. Even with zero results, you must output a helpful ANSWER.
+"""
 
     @function_tool
     async def retrieval_tool(query: str) -> str:

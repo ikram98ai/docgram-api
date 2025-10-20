@@ -14,6 +14,7 @@ logger.setLevel(logging.INFO)
 
 s3_client = boto3.client("s3")
 S3_BUCKET = settings.s3_bucket
+STAGE = settings.stage
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -48,7 +49,7 @@ def upload_to_s3(file_content: bytes, key: str, content_type: str) -> str:
         s3_client.put_object(
             Bucket=S3_BUCKET, Key=key, Body=file_content, ContentType=content_type
         )
-        return f"https://{S3_BUCKET}.s3.amazonaws.com/{key}"
+        return f"https://{S3_BUCKET}.s3.amazonaws.com/{STAGE}/{key}"
     except ClientError as e:
         logger.error(f"S3 upload error: {e}")
         raise HTTPException(status_code=500, detail="File upload failed")

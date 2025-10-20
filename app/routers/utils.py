@@ -4,7 +4,6 @@ from fastapi import HTTPException
 from datetime import datetime, timezone
 from uuid import uuid4
 import fitz
-import os
 import uuid
 from ..utils import upload_to_s3
 
@@ -12,12 +11,10 @@ from ..utils import upload_to_s3
 from ..models import UserModel, PostModel, ChatMessageModel, ChatConversationModel
 from ..ai.rag import get_rag_instance
 from ..ai.ai_agents import agent_runner
-from ..config import settings
 # Configure logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-STAGE = settings.stage
 
 
 def get_pdf_page_count(pdf_content: bytes) -> int:
@@ -42,7 +39,7 @@ def generate_pdf_thumbnail(pdf_content: bytes, post_id: str) -> Optional[str]:
                 img_data = pixmap.tobytes("png")
 
                 # Upload thumbnail to S3
-                thumbnail_key = f"{STAGE}/thumbnails/{post_id}_thumbnail.png"
+                thumbnail_key = f"thumbnails/{post_id}_thumbnail.png"
                 return upload_to_s3(img_data, thumbnail_key, "image/png")
     except Exception as e:
         logger.error(f"Thumbnail generation error: {e}")
@@ -97,7 +94,7 @@ def background_create_post(
         post_id = str(uuid.uuid4())
 
         # Upload PDF to S3
-        pdf_key = f"{STAGE}/posts/{post_id}.pdf"
+        pdf_key = f"posts/{post_id}.pdf"
         pdf_url = upload_to_s3(pdf_content, pdf_key, "application/pdf")
 
         # Get PDF metadata

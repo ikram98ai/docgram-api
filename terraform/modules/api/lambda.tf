@@ -40,6 +40,7 @@ resource "aws_lambda_function" "docgram_lambda" {
     variables = {
       GEMINI_API_KEY                = var.gemini_api_key
       PINECONE_API_KEY              = var.pinecone_api_key
+      S3_BUCKET                     = aws_s3_bucket.docgram_storage.bucket
       STAGE                         = var.stage
       SECRET_KEY                    = var.secret_key
       ALGORITHM                     = "HS256"

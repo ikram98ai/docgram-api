@@ -12,7 +12,6 @@ from ..schemas import User, UserUpdateRequest, Post
 from ..models import PostModel
 from ..utils import upload_to_s3
 from .utils import get_user_by_id
-from ..config import settings
 # Configure logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -20,7 +19,6 @@ logger.setLevel(logging.INFO)
 router = APIRouter(prefix="/users", tags=["Users"])
 
 # AWS clients (initialized once for Lambda container reuse)
-STAGE = settings.stage
 
 
 @router.get("/me", response_model=User)
@@ -71,7 +69,7 @@ async def update_user_profile(
 
             # Upload avatar to S3
             avatar_content = await avatar_file.read()
-            avatar_key = f"{STAGE}/avatars/{current_user.user_id}_{uuid.uuid4()}.jpg"
+            avatar_key = f"avatars/{current_user.user_id}_{uuid.uuid4()}.jpg"
             avatar_url = upload_to_s3(avatar_content, avatar_key, "image/jpeg")
             current_user.avatar_url = avatar_url
 
